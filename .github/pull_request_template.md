@@ -1,10 +1,13 @@
-## Change
+## What changed
 
-Describe the final behavior and the protocol evidence behind it.
+Describe the final behavior and its purpose.
 
-## Validation
+## Evidence
 
-- [ ] `uv run pytest`
-- [ ] `uv run ruff check .`
-- [ ] `uv run ruff format --check .`
-- [ ] No secrets or raw captures are included
+Link the source, issue or redacted packet capture supporting protocol changes.
+Mark unverified behavior as a hypothesis. For hardware tests, include the S400
+PID, firmware version and Bluetooth backend.
+
+## Notes for reviewers
+
+Add anything that cannot be inferred from the code or automated checks.
