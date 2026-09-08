@@ -14,6 +14,23 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
+## Commits and pull requests
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for every
+commit and pull-request title. Typical types in this repository are `feat`,
+`fix`, `docs`, `test`, `refactor`, `ci`, `build` and `chore`.
+
+Examples:
+
+```text
+feat(pairing): handle the S400 bind-confirm frame
+fix(parser): reject a truncated capability field
+docs(capture): add AAOS passthrough verification
+```
+
+The pull-request title is checked automatically because accepted changes are
+intended to be squash-merged using that title.
+
 The reusable protocol code lives in
 `custom_components/xiaomi_s400_local`. Standalone tools load the same modules,
 so protocol changes should not be duplicated under `tools`.
