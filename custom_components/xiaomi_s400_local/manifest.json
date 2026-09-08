@@ -1,0 +1,18 @@
+{
+  "domain": "xiaomi_s400_local",
+  "name": "Xiaomi S400 Local",
+  "bluetooth": [
+    {
+      "service_data_uuid": "0000fe95-0000-1000-8000-00805f9b34fb"
+    }
+  ],
+  "codeowners": ["@kbpk"],
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://github.com/kbpk/xiaomi-s400-homeassistant#readme",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/kbpk/xiaomi-s400-homeassistant/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

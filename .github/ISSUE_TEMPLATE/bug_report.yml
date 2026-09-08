@@ -1,0 +1,56 @@
+name: Bug report
+description: Report an integration, parser or pairing problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Never attach bindkeys, tokens, credential JSON files or unredacted
+        captures. Read SECURITY.md before sharing protocol data.
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: home_assistant
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.9.0
+    validations:
+      required: true
+  - type: input
+    id: scale
+    attributes:
+      label: Scale PID and firmware
+      placeholder: PID 0x3BD5, firmware 2.1.1_0006
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - HACS installation or setup
+        - Bluetooth discovery
+        - Existing-key setup
+        - Local provisioning
+        - MiBeacon measurements
+        - Diagnostic tools
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include exact reproduction steps and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      render: text

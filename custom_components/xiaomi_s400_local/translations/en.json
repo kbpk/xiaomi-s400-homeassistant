@@ -1,0 +1,54 @@
+{
+  "title": "Xiaomi S400 Local",
+  "config": {
+    "abort": {
+      "already_configured": "This scale is already configured.",
+      "not_supported": "This Bluetooth device is not a supported S400."
+    },
+    "error": {
+      "device_not_found": "The scale is not currently reachable. Wake it and retry.",
+      "invalid_address": "Enter a six-byte Bluetooth MAC address.",
+      "invalid_key": "Bindkey must be 32 hex characters and token, when supplied, 24 hex characters.",
+      "pairing_failed": "The scale rejected or did not complete local provisioning. Reset and wake it, then retry."
+    },
+    "step": {
+      "user": {
+        "title": "Set up Xiaomi S400",
+        "description": "Choose the scale and a fully local setup method.",
+        "data": {
+          "address": "Bluetooth address",
+          "setup_method": "Setup method"
+        }
+      },
+      "pair": {
+        "title": "Provision locally",
+        "description": "Factory reset and wake the scale, keep it close to the Home Assistant Bluetooth adapter, then submit. This creates new local credentials and replaces any previous Mi Home ownership."
+      },
+      "keys": {
+        "title": "Use existing local credentials",
+        "description": "The 16-byte bindkey is enough for passive measurements. The 12-byte token is optional and retained for future active GATT support.",
+        "data": {
+          "bindkey": "Bindkey (32 hex characters)",
+          "token": "Login token (24 hex characters, optional)"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Xiaomi S400 discovered",
+        "description": "Continue to local provisioning. This replaces any previous Mi Home ownership."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "weight": {"name": "Weight"},
+      "heart_rate": {"name": "Heart rate"},
+      "impedance_low": {"name": "Impedance 50 kHz"},
+      "impedance_high": {"name": "Impedance 250 kHz"},
+      "profile_id": {"name": "Profile ID"},
+      "signal_strength": {"name": "Signal strength"}
+    },
+    "binary_sensor": {
+      "stabilized": {"name": "Measurement stabilized"}
+    }
+  }
+}

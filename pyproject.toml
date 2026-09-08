@@ -1,0 +1,30 @@
+[project]
+name = "xiaomi-s400-homeassistant"
+version = "0.1.0"
+description = "Fully local Xiaomi S400 BLE integration for Home Assistant"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+dependencies = [
+  "bleak>=0.22,<2",
+  "cryptography>=41",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<10",
+  "ruff>=0.12,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "SIM", "UP"]

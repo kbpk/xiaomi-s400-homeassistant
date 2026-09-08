@@ -1,0 +1,20 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.py[cod]
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Traces can contain device identifiers and protocol transcripts.
+captures/
+private/
+*.btsnoop
+*.pcap
+*.pcapng
+*snoop_hci*.log
+s400-gatt-trace.jsonl
+s400-secrets.json

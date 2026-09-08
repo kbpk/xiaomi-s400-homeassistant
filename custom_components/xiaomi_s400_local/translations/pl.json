@@ -1,0 +1,46 @@
+{
+  "title": "Xiaomi S400 lokalnie",
+  "config": {
+    "abort": {
+      "already_configured": "Ta waga jest już skonfigurowana.",
+      "not_supported": "To urządzenie Bluetooth nie jest obsługiwaną wagą S400."
+    },
+    "error": {
+      "device_not_found": "Waga jest nieosiągalna. Wybudź ją i spróbuj ponownie.",
+      "invalid_address": "Podaj sześciobajtowy adres MAC Bluetooth.",
+      "invalid_key": "Bindkey musi mieć 32 znaki hex, a opcjonalny token 24 znaki hex.",
+      "pairing_failed": "Waga odrzuciła lub nie zakończyła lokalnego provisioningu. Zresetuj ją, wybudź i spróbuj ponownie."
+    },
+    "step": {
+      "user": {
+        "title": "Konfiguracja Xiaomi S400",
+        "description": "Wybierz wagę i całkowicie lokalną metodę konfiguracji.",
+        "data": {"address": "Adres Bluetooth", "setup_method": "Metoda konfiguracji"}
+      },
+      "pair": {
+        "title": "Lokalny provisioning",
+        "description": "Przywróć ustawienia fabryczne i wybudź wagę, trzymaj ją blisko adaptera Bluetooth Home Assistanta, a następnie zatwierdź. Operacja tworzy nowe lokalne klucze i zastępuje wcześniejsze powiązanie z Mi Home."
+      },
+      "keys": {
+        "title": "Istniejące klucze lokalne",
+        "description": "16-bajtowy bindkey wystarcza do pomiarów pasywnych. 12-bajtowy token jest opcjonalny i zostanie zachowany dla przyszłej obsługi aktywnego GATT.",
+        "data": {"bindkey": "Bindkey (32 znaki hex)", "token": "Token login (24 znaki hex, opcjonalny)"}
+      },
+      "discovery_confirm": {
+        "title": "Wykryto Xiaomi S400",
+        "description": "Kontynuuj lokalny provisioning. Operacja zastąpi wcześniejsze powiązanie z Mi Home."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "weight": {"name": "Masa"},
+      "heart_rate": {"name": "Tętno"},
+      "impedance_low": {"name": "Impedancja 50 kHz"},
+      "impedance_high": {"name": "Impedancja 250 kHz"},
+      "profile_id": {"name": "Identyfikator profilu"},
+      "signal_strength": {"name": "Siła sygnału"}
+    },
+    "binary_sensor": {"stabilized": {"name": "Pomiar ustabilizowany"}}
+  }
+}
