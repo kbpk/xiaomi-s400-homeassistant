@@ -5,16 +5,18 @@
 
 Eksperymentalna integracja HACS dla Xiaomi Body Composition Scale S400
 (`MJTZC01YM`, `yunmai.scales.ms103/ms104/ms107`). Odbiór danych i przechowywanie
-kluczy odbywają się lokalnie; lokalny provisioning jest w trakcie badań.
-Integracja nie zawiera klienta
-Xiaomi Cloud i nie prosi o dane konta Xiaomi.
+kluczy odbywają się lokalnie. Sama integracja Home Assistant nie zawiera
+klienta Xiaomi Cloud i nie prosi o dane konta Xiaomi. Osobne narzędzie
+laboratoryjne może jednorazowo poprosić backend Xiaomi o podpis wymagany przez
+factory-new S400 z auth version 2.
 
 > [!WARNING]
 > Projekt jest w fazie alpha. Pasywne dekodowanie MiBeacon ma testy, ale pełny
-> lokalny provisioning nie działa jeszcze na badanej S400 z firmware
+> provisioning nie został jeszcze potwierdzony na badanej S400 z firmware
 > `2.1.1_0006`, która zgłasza auth version 2. Analiza publicznego SDK wykazała
-> inną kolejność rejestracji oraz wymaganie podpisu i certyfikatu serwera.
-> Provisioner wykrywa tę wersję i zgłasza brak obsługi. Szczegółowe dowody,
+> wymaganie podpisu i certyfikatu serwera. Czysto lokalny provisioner wykrywa tę
+> wersję i zgłasza brak obsługi. Dodano osobny, oczekujący na test sprzętowy
+> provisioner z jednorazowym podpisaniem po stronie Xiaomi. Szczegółowe dowody,
 > granice zgodności z S400 i analiza bez Bluetooth: [AUTH_V2.md](research/AUTH_V2.md).
 > [Analiza oficjalnego APK Mi Home](research/MIHOME_V2.md) niezależnie
 > potwierdza tę kolejność i identyfikuje brakujące poświadczenie rejestracji.
@@ -22,7 +24,9 @@ Xiaomi Cloud i nie prosi o dane konta Xiaomi.
 ## Stan implementacji
 
 - eksperymentalny provisioning standard-auth version 1 bez OOB przez P-256 ECDH,
-  HKDF-SHA256 i AES-CCM; version 2 nie jest jeszcze obsługiwana;
+  HKDF-SHA256 i AES-CCM;
+- narzędzie auth v2 wykonujące ECDH lokalnie, proszące Xiaomi tylko o podpisany
+  credential, sprawdzające oba podpisy lokalnie i weryfikujące token loginem;
 - analiza captures bez Bluetooth i testowany offline format credentialu v2;
 - zapis 16-bajtowego bindkey i 12-bajtowego tokenu dopiero po odpowiedzi
   rejestracyjnej urządzenia i poprawnym loginie;
@@ -132,6 +136,34 @@ backendu Bluetooth.
 Plik sekretów ma prawa `0600`. Trace zawiera ramki GATT i klucze publiczne,
 ale nie zawiera wyprowadzonych tokenu, bindkey ani kluczy sesji. Nie publikuj
 pliku `s400-secrets.json`.
+
+## Jednorazowy provisioning auth v2 przez Xiaomi
+
+To jest praktyczna ścieżka dla factory-new S400, gdy lokalny test certyfikatu
+kończy się `REGISTER_ERROR`. Token i bindkey nadal powstają lokalnie z ECDH.
+Do Xiaomi trafiają MAC, model, token i bindkey, tak jak w Mi Home; serwer zwraca
+DID, certyfikat oraz podpis `DID || bindkey || UTC`. Skrypt sprawdza łańcuch
+podpisów przed wysłaniem credentialu do wagi, a po rejestracji sprawdza token
+lokalnym loginem GATT.
+
+Na Windows z ASUS USB-BT400 uruchom narzędzie w zwykłym PowerShellu. Login i
+hasło są odczytywane interaktywnie; hasło, cookies i odpowiedzi API nie trafiają
+do argumentów, trace'u ani pliku wynikowego:
+
+```powershell
+$repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
+& "$repo\tools\windows\run_s400_xiaomi_pair.ps1" -Region de
+```
+
+Region musi odpowiadać regionowi konta Mi Home. Dla konta używanego w Polsce
+typową wartością jest `de`; dostępne są też `cn`, `us`, `ru`, `tw`, `sg`, `in`
+i `i2`. Jeśli Xiaomi zażąda weryfikacji konta, skrypt pokaże URL do otwarcia w
+przeglądarce i po zakończeniu spróbuje ponownie. Captcha jest obecnie jawnie
+wyświetlana z pliku tymczasowego i przesyłana po wpisaniu odpowiedzi.
+
+Po sukcesie Xiaomi nie jest potrzebne do działania integracji. W Home Assistant
+wprowadź 32 znaki `bindkey` i 24 znaki `token` z pliku wynikowego. Narzędzie nie
+pobiera istniejących kluczy z konta i nie wylicza pomiarów w chmurze.
 
 Szczegóły protokołu, stan dowodów i workflow capture znajdują się w
 [`research/PROTOCOL.md`](research/PROTOCOL.md) oraz

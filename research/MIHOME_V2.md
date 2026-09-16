@@ -109,11 +109,24 @@ Wartość czasu powyżej jest przykładowa. Algorytm Base64 potwierdza
 z `-` i `_`. Certyfikat i podpis nie są ciągami hex. Dla starszej ścieżki
 klient używa `POST /device/bltbind` bez dodatkowego pola `beacon_key`.
 
-Znane są ścieżki API. **Pełna lista hostname'ów, regionalny routing, cookies,
-opakowanie szyfrujące i polityka TLS tej konkretnej rozmowy nie zostały jeszcze
-odtworzone.** W kodzie APK są stałe pinów TLS, ale sam ich byt nie dowodzi,
-że stosuje je klient obsługujący te endpointy. Nie przedstawiamy niesprawdzonych
-hooków ani własnego CA jako gotowego rozwiązania tej części.
+`BleNetRequest` przechodzi przez zwykły klient Mi Home API. Publiczne, działające
+klienty `xiaomi-ble` i `hass-xiaomi-miot` potwierdzają regionalny routing
+`https://<region>.api.io.mi.com/app`, sesję `sid=xiaomiio` oraz kopertę
+`ENCRYPT-RC4`: nonce, `signed_nonce = SHA-256(ssecurity || nonce)`, szyfrowanie
+RC4 po odrzuceniu pierwszych 1024 bajtów strumienia i podpis SHA-1 pól koperty.
+Region `cn` nie ma prefiksu. Implementacja ograniczona do dwóch endpointów jest
+w `tools/xiaomi_cloud.py`.
+
+Nie przechwycono jeszcze udanego żądania z konta ani odpowiedzi dla tej S400,
+więc zgodność bieżącego backendu tych dwóch endpointów pozostaje do testu na
+sprzęcie. Narzędzie używa bezpośredniego HTTPS i systemowego magazynu CA; piny
+APK nie biorą udziału, ponieważ Mi Home nie pośredniczy w żądaniu.
+
+Pole `smac` zostało rozstrzygnięte przez przepływ danych w APK. Parser
+`MiotBleAdvPacket` czyta MAC obecny w FE95, odwraca kolejność sześciu bajtów i
+formatuje go wielkimi literami z dwukropkami. Connector pobiera dokładnie tę
+wartość z `BleDeviceProp`. W zebranych reklamach S400 osadzony MAC jest zgodny z
+adresem urządzenia widzianym przez Windows.
 
 ## Co to zmienia dla całkowicie lokalnego provisionera
 
@@ -133,6 +146,23 @@ sam wybór emulatora Androida. Publiczny katalog wymienia
 obraz APP o rozmiarze 153 196 bajtów. Pobrana publiczna strona nie podała URL
 obrazu (`url: null`); nie pobrano ani nie przeanalizowano tego firmware.
 Informacja katalogowa jest tropem do pozyskania pliku, nie dowodem jego zawartości.
+
+## Provisioner z jednorazowym podpisaniem
+
+`tools/s400_xiaomi_pair.py` odtwarza bieżącą gałąź Mi Home bez uruchamiania APK:
+
+1. loguje się do `sid=xiaomiio`, nie zapisując hasła ani cookies;
+2. wykonuje ECDH z wagą i lokalnie wyprowadza token, bindkey oraz did_key;
+3. wywołuje `bltapplydid`, a następnie `ble_standard_bind`;
+4. przed wysłaniem odpowiedzi sprawdza certyfikat względem publicznego root key
+   z SDK i podpis danych względem klucza z certyfikatu;
+5. wysyła typ 0 i typ 7, wymaga `REGISTER_OK`, wykonuje lokalny login tokenem i
+   dopiero wtedy zapisuje sekrety z prawami `0600`.
+
+Jest to świadome odejście od celu „zero Xiaomi podczas pierwszego bindu”. Po
+udanym bindzie ścieżka pomiarowa pozostaje całkowicie lokalna. Na dzień tej
+aktualizacji klient ma testy jednostkowe koperty i walidacji danych, ale nie ma
+jeszcze udanego wyniku z produkcyjnego konta i S400.
 
 ## Odtworzenie analizy APK
 

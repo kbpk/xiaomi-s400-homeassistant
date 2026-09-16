@@ -10,6 +10,11 @@ Aktualizacja: analiza [oficjalnego APK Mi Home 11.7.705](MIHOME_V2.md)
 niezależnie potwierdza kolejność, format i pola `cloud_cert`/`cloud_sign`/`utc`.
 Zidentyfikowano też endpoint `/v2/device/ble_standard_bind`.
 
+Dodano `tools/s400_xiaomi_pair.py`, który implementuje brakujący wariant z
+jednorazowym uzyskaniem produkcyjnego podpisu. Kod weryfikuje credential lokalnie
+przed wysłaniem, lecz jego zgodność z produkcyjnym kontem i wagą oczekuje na
+pierwszy test sprzętowy.
+
 ## Źródło i odtwarzalność
 
 Publiczne repozytorium SDK AC792N zawiera archiwum
@@ -141,7 +146,7 @@ sequenceDiagram
     D-->>C: typ 3: device_public[64]
     Note over C,D: P-256 ECDH; dla io=0 OOB to 16 zer
     Note over C,D: HKDF-SHA256 -> token[12], bindkey[16], did_key[16]
-    Note over C: Brakuje certyfikatu i podpisu dla tego DID/bindkey/UTC
+    Note over C: Czysto lokalnie brakuje certyfikatu i podpisu<br/>Provisioner może pobrać je jednorazowo z Xiaomi
     C->>D: 0x0010: 13 00 00 00
     C->>D: typ 0: CCM(DID[20] || signature[64] || UTC[4]) + MIC[4]
     C->>D: typ 7: server certificate DER

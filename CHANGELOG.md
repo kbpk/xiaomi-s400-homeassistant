@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add a one-time Xiaomi-assisted standard-auth v2 provisioner that derives
+  keys locally, verifies the returned signatures and saves secrets only after
+  a successful device login.
+- Document the Mi Home API envelope and the origin of the `smac` bind property.
+
 ## 0.1.0 - Unreleased
 
 - Add the initial HACS custom integration structure.
