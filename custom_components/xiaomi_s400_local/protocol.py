@@ -1,5 +1,28 @@
 """Mi Home BLE standard-auth protocol constants used by the S400."""
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class RegistrationInfo:
+    """GET_INFO payload, distinct from the MiBeacon version and auth mode."""
+
+    version: int
+    io_capability: int
+    did: bytes | None
+
+
+def parse_registration_info(payload: bytes) -> RegistrationInfo:
+    """Decode the SDK's four-byte header and optional twenty-byte DID."""
+    if len(payload) not in (4, 24):
+        raise ValueError("GET_INFO must contain 4 or 24 bytes")
+    return RegistrationInfo(
+        version=int.from_bytes(payload[:2], "little"),
+        io_capability=int.from_bytes(payload[2:4], "little"),
+        did=payload[4:] if len(payload) == 24 else None,
+    )
+
+
 UPNP = "00000010-0000-1000-8000-00805f9b34fb"
 AVCTP = "00000017-0000-1000-8000-00805f9b34fb"
 AUTH_AUX = "00000018-0000-1000-8000-00805f9b34fb"
@@ -23,7 +46,7 @@ CMD_SEND_LOGIN_INFO = bytes.fromhex("0000000a0200")
 RCV_RDY = bytes.fromhex("00000101")
 RCV_OK = bytes.fromhex("00000100")
 RCV_ACK = bytes.fromhex("00000300")
-RCV_TIMEOUT = bytes.fromhex("000001050100")
+RCV_LOST_PREFIX = bytes.fromhex("00000105")
 
 TRANSPORT_OFFER = bytes.fromhex("00000400")
 TRANSPORT_ACCEPT = bytes.fromhex("00000500")

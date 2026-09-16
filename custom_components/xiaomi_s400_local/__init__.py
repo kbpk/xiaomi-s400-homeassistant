@@ -6,7 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_BINDKEY, DOMAIN
+from .const import CONF_BINDKEY, CONF_TOKEN, DOMAIN
 from .coordinator import S400Coordinator
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
@@ -14,10 +14,12 @@ PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Start passive local reception for one S400."""
+    token_hex = entry.data.get(CONF_TOKEN, "")
     coordinator = S400Coordinator(
         hass,
         entry.data["address"],
         bytes.fromhex(entry.data[CONF_BINDKEY]),
+        bytes.fromhex(token_hex) if token_hex else None,
     )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     coordinator.start()
@@ -30,5 +32,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
     coordinator: S400Coordinator = hass.data[DOMAIN].pop(entry.entry_id)
-    coordinator.stop()
+    await coordinator.stop()
     return True

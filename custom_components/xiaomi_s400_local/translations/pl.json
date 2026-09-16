@@ -9,7 +9,8 @@
       "device_not_found": "Waga jest nieosiągalna. Wybudź ją i spróbuj ponownie.",
       "invalid_address": "Podaj sześciobajtowy adres MAC Bluetooth.",
       "invalid_key": "Bindkey musi mieć 32 znaki hex, a opcjonalny token 24 znaki hex.",
-      "pairing_failed": "Waga odrzuciła lub nie zakończyła lokalnego provisioningu. Zresetuj ją, wybudź i spróbuj ponownie."
+      "pairing_failed": "Waga odrzuciła lub nie zakończyła lokalnego provisioningu. Zresetuj ją, wybudź i spróbuj ponownie.",
+      "registration_unsupported": "Ta wersja parowania nie jest jeszcze obsługiwana lokalnie. Ponowny reset nie pomoże. Jeśli masz już bindkey, wybierz konfigurację z istniejącymi kluczami."
     },
     "step": {
       "user": {
@@ -23,7 +24,7 @@
       },
       "keys": {
         "title": "Istniejące klucze lokalne",
-        "description": "16-bajtowy bindkey wystarcza do pomiarów pasywnych. 12-bajtowy token jest opcjonalny i zostanie zachowany dla przyszłej obsługi aktywnego GATT.",
+        "description": "16-bajtowy bindkey umożliwia odbiór reklam. Dodaj 12-bajtowy token, aby Home Assistant łączył się po wybudzeniu wagi i automatycznie odbierał bieżące oraz końcowe pomiary przez GATT.",
         "data": {"bindkey": "Bindkey (32 znaki hex)", "token": "Token login (24 znaki hex, opcjonalny)"}
       },
       "discovery_confirm": {

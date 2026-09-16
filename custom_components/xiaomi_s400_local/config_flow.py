@@ -23,7 +23,12 @@ from .const import (
     SETUP_KEYS,
     SETUP_LOCAL,
 )
-from .pairing import PairingError, pair_device, product_id_from_service_data
+from .pairing import (
+    PairingError,
+    RegistrationUnsupported,
+    pair_device,
+    product_id_from_service_data,
+)
 
 
 def _normalise_hex(value: str, byte_length: int) -> str:
@@ -114,6 +119,8 @@ class S400ConfigFlow(ConfigFlow, domain=DOMAIN):
                         ble_device=device,
                         product_id=_product_id_for_address(self.hass, self._address),
                     )
+                except RegistrationUnsupported:
+                    errors["base"] = "registration_unsupported"
                 except (PairingError, BleakError, TimeoutError, OSError, ValueError):
                     errors["base"] = "pairing_failed"
                 else:

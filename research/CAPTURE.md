@@ -200,7 +200,7 @@ Przy analizie interesują nas szczególnie operacje ATT Write Request/Command
 (`0x12`/`0x52`) oraz Notification/Indication (`0x1b`/`0x1d`). Sam adres MAC
 nie występuje przy każdym pakiecie ACL; po ustanowieniu połączenia ruch wiąże się
 po `bthci_acl.connection_handle`. Dlatego wiarygodniej wybrać właściwe zdarzenie
-LE Connection Complete dla `D4:43:8A:CC:FD:68`, zanotować connection handle i
+LE Connection Complete dla `<S400_MAC>`, zanotować connection handle i
 filtrować dalszy ATT po tym handle niż polegać tylko na `bluetooth.addr`.
 
 Do porównania sieci aplikacji, na kontrolowanym interfejsie Raspberry Pi:

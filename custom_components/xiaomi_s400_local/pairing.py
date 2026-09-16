@@ -54,11 +54,34 @@ from .protocol import (
     UPNP,
     VEND1A,
     VEND1C,
+    parse_registration_info,
 )
 
 
 class PairingError(RuntimeError):
     """Pairing stopped because the device sent an unexpected response."""
+
+
+class RegistrationUnsupported(PairingError):
+    """The advertised registration variant has no implemented provisioner."""
+
+
+def check_registration_support(version: int, io_capability: int) -> None:
+    """Avoid applying the legacy registration exchange to a different protocol."""
+    if version == 2:
+        raise RegistrationUnsupported(
+            "GET_INFO reports auth version 2. The matching public SDK expects "
+            "0x13 BEFORE registration data, then a signed 92-byte payload and "
+            "a server certificate (parcel type 0x07). Local v2 registration "
+            "is not implemented; see research/AUTH_V2.md. "
+            "No registration keys have been sent or saved."
+        )
+    if version != 1:
+        raise RegistrationUnsupported(f"unsupported GET_INFO auth version: {version}")
+    if io_capability:
+        raise RegistrationUnsupported(
+            "registration with OOB capabilities is not implemented"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +94,7 @@ class PairingResult:
     did_hex: str
     bindkey: str
     token: str
-    auth_protocol: str = "Mi Home BLE standard-auth v2"
+    auth_protocol: str = "Mi Home BLE standard-auth (GET_INFO version 1)"
 
 
 class TraceRecorder:
@@ -208,8 +231,16 @@ class _GattTransport:
             b"\x00\x00\x00" + bytes((parcel_type,)) + frame_count.to_bytes(2, "little")
         )
 
-    async def receive_parcel(self) -> bytes:
+    async def receive_parcel(self, expected_type: int | None = None) -> bytes:
         header = await self.receive(AVDTP)
+        if (
+            expected_type is not None
+            and len(header) >= 4
+            and header[3] != expected_type
+        ):
+            raise PairingError(
+                f"expected parcel type {expected_type:#04x}, received {header[3]:#04x}"
+            )
         # With the transport greeting and a large negotiated ATT payload,
         # Xiaomi scales can put the complete parcel in one notification:
         # 00 00 02 <type> <payload>. It uses a different acknowledgement.
@@ -285,10 +316,10 @@ async def _login(transport: _GattTransport, token: bytes) -> SessionKeys:
     await transport.send_parcel(app_random)
     await transport.expect(AVDTP, RCV_OK, "login random acknowledgement")
 
-    device_random = await transport.receive_parcel()
+    device_random = await transport.receive_parcel(expected_type=0x0D)
     if len(device_random) != 16:
         raise PairingError(f"device login random has {len(device_random)} bytes")
-    device_info = await transport.receive_parcel()
+    device_info = await transport.receive_parcel(expected_type=0x0C)
     keys = derive_login_keys(token, app_random, device_random)
     expected_device_info = login_hmac(keys.device_key, device_random + app_random)
     if not secrets.compare_digest(device_info, expected_device_info):
@@ -394,23 +425,31 @@ async def pair_device(
                 )
             await asyncio.sleep(0.2)
 
-            private_key, public_xy = generate_keypair()
             await transport.write(UPNP, CMD_GET_INFO)
-            registration_info = await transport.receive_parcel()
-            if len(registration_info) >= 24:
-                selected_did = registration_info[4:24]
-            else:
-                selected_did = did or _new_did()
+            registration_info = parse_registration_info(
+                await transport.receive_parcel(expected_type=0x00)
+            )
+            trace.record(
+                "registration_info",
+                auth_version=registration_info.version,
+                io_capability=registration_info.io_capability,
+                has_did=registration_info.did is not None,
+            )
+            check_registration_support(
+                registration_info.version, registration_info.io_capability
+            )
+            selected_did = registration_info.did or did or _new_did()
             if len(selected_did) != 20:
                 raise PairingError("selected DID is not 20 bytes")
 
+            private_key, public_xy = generate_keypair()
             await transport.write(UPNP, CMD_SET_KEY)
             await transport.write(AVDTP, transport.parcel_command(0x03, public_xy))
             await transport.expect(AVDTP, RCV_RDY, "public key readiness")
             await transport.send_parcel(public_xy)
             await transport.expect(AVDTP, RCV_OK, "public key acknowledgement")
 
-            device_public_xy = await transport.receive_parcel()
+            device_public_xy = await transport.receive_parcel(expected_type=0x03)
             setup = derive_setup_secrets(private_key, device_public_xy)
             encrypted_did = encrypt_did(selected_did, setup.did_key)
             if inter_stage_delay > 0:

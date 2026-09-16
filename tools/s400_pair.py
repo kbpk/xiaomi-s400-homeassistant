@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Provision a factory-reset Xiaomi S400 entirely over local BLE."""
+"""Experimental local registration; GET_INFO auth version 2 is unsupported."""
 
 from __future__ import annotations
 

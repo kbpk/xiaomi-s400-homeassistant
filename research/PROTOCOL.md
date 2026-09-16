@@ -1,6 +1,12 @@
 # S400: stan protokołu i dowody
 
-Stan na 2026-09-07. „Potwierdzone” oznacza kod urządzenia/klienta open source
+Aktualizacja 2026-09-08: [analiza standard-auth v2](AUTH_V2.md) rozstrzyga
+znaczenie `02000000` i znajduje różnicę kolejności oraz podpisy serwera w
+publicznym SDK. To zastępuje wcześniejszą hipotezę, że lokalne ECDH i sam DID
+wystarczą także na badanej S400. Dalsza zgodność SDK z firmware S400 wymaga
+potwierdzenia. Poniżej pozostaje historia eksperymentów z zaznaczonymi korektami.
+
+„Potwierdzone” oznacza kod urządzenia/klienta open source
 albo działający capture opisany przez autora implementacji. Zachowanie konkretnej
 sztuki S400 pozostaje hipotezą do chwili zebrania trace z tego firmware.
 
@@ -69,14 +75,17 @@ UUID-y obserwowane dla aktywnego S400 przez `xiaomi-s400-live`:
 Źródła: [stałe i kod loginu S400](https://github.com/nokistin/xiaomi-s400-live/tree/main/xiaomi_s400_live),
 [dokumentacja miauth](https://github.com/dnandha/miauth/tree/main/doc).
 
-## Diagram rejestracji i loginu
+## Starszy diagram rejestracji i loginu (GET_INFO version 1)
+
+Nie stosować tej kolejności do GET_INFO version 2. Aktualny diagram i różnice:
+[AUTH_V2.md](AUTH_V2.md#sekwencja-wersji-2-w-znalezionym-sdk).
 
 ```mermaid
 sequenceDiagram
     participant HA as Lokalny klient
     participant S as S400
     HA->>S: UPNP a2 00 00 00 (GET_INFO)
-    S-->>HA: AVDTP status + istniejący DID lub brak DID
+    S-->>HA: AVDTP version + io + opcjonalny DID
     HA->>S: UPNP 15 00 00 00 (SET_KEY)
     HA->>S: AVDTP header + public key P-256 X||Y
     S-->>HA: AVDTP header + device public key X||Y
@@ -97,32 +106,30 @@ oraz [implementacji `MiClient.register`](https://github.com/dnandha/miauth/blob/
 
 ## Odpowiedź A/B/C
 
-Najmocniej wspierana jest **A**: standard-auth pozwala klientowi i urządzeniu
-lokalnie uzgodnić oba sekrety. Kod `miauth` wyprowadza token i bindkey z ECDH,
-a aktywator atc1441 robi tę samą rejestrację bez backendu Xiaomi. W pokazanym
-handshake nie ma certyfikatu, podpisu Xiaomi ani wartości pobieranej przez sieć.
+**A jest potwierdzona dla starszej rejestracji version 1**, a generowanie tokenu
+i bindkey przez ECDH/HKDF występuje też w znalezionym SDK version 2.
 
-**B nie ma obecnie dowodu** dla tego wariantu protokołu. Zamknięta biblioteka po
-stronie firmware Xiaomi nie oznacza, że klient musi dostarczyć cloud credential;
-na drucie widoczny jest ECDH i zaszyfrowany DID.
+**B jest potwierdzona dla znalezionego SDK version 2:** przed zapisem kluczy
+wymaga ono certyfikatu serwera oraz podpisu DID, bindkey i UTC. Próba na S400
+potwierdziła cały transport tych pól i odrzucenie własnego certyfikatu wynikiem
+`0x12000000`. Dokładną kolejność kontroli kryptograficznych potwierdza kod SDK;
+sam kod błędu S400 nie rozróżnia, która z nich zakończyła się niepowodzeniem.
 
-**C pozostaje możliwe dla konkretnego firmware S400:** aplikacja może tworzyć DID
-w chmurze ze względów własności/synchronizacji, chociaż urządzenie kryptograficznie
-go nie poświadcza. Lokalny aktywator generuje własny 20-bajtowy DID i działa z
-innymi urządzeniami standard-auth. Nie znaleziono jeszcze opublikowanego capture,
-który dowodzi, że factory-new S400 `2.1.1_0006` przyjmuje taki DID.
+**C pozostaje niepotwierdzona:** nie znaleziono w tym SDK alternatywnej ścieżki
+rejestracji bez podpisu serwera. Dokładny format, publiczny root i odtwarzalne
+źródło znajdują się w [AUTH_V2.md](AUTH_V2.md).
 
 ## Wynik pierwszego capture na sprzęcie
 
 Capture `captures/s400-gatt.jsonl` potwierdził dla badanej sztuki nazwę
-`Xiaomi Scale S400 FD68`, PID `0x3BD5`, FE95 oraz charakterystyki `0x0010`,
+`Xiaomi Scale S400 <suffix>`, PID `0x3BD5`, FE95 oraz charakterystyki `0x0010`,
 `0x0017`–`0x001c`. Dodatkowa charakterystyka `0x0018` ma właściwości
 `notify` i `write-without-response`. Wszystkie subskrypcje poza standardowym
 Service Changed (`0x2a05`) zostały zaakceptowane.
 
 `captures/s400-pair.jsonl` potwierdził lokalnie następującą część rejestracji:
 
-1. `GET_INFO` zwróciło czterobajtowy status urządzenia bez zapisanego DID.
+1. `GET_INFO` zwróciło wersję auth i capabilities I/O bez pola DID.
 2. S400 zaakceptował `SET_KEY`, odebrał 64-bajtowy punkt P-256 klienta i
    potwierdził całą paczkę.
 3. S400 wysłał własny 64-bajtowy punkt P-256 w czterech ramach.
@@ -140,7 +147,7 @@ Reklama `3058d53b0068fdcc8a43d408` dekoduje się jako MiBeacon v5,
 nie zawiera pola I/O/OOB. Badana sztuka deklaruje więc dokładnie standard-auth,
 a nie secure-auth. Czterobajtowy wynik `GET_INFO` to konsekwentnie `02000000`,
 podczas gdy ogólny aktywator atc1441 ma specjalną gałąź dla `01000000`.
-Znaczenie tej różnicy dla S400 pozostaje hipotezą.
+Aktualizacja: to wersje protokołu 2 i 1, a nie dwa warianty statusu.
 
 Niepotwierdzony fragment zaczyna się dokładnie od odpowiedzi `RCV_RDY` na
 `SEND_DID`. Waga nie zobaczyła jeszcze zaszyfrowanej treści DID, dlatego cisza
@@ -226,8 +233,10 @@ i lokalne potwierdzenie urządzenia. Nie ma w nim kodu, który łączy stan
 dokumentacji wyklucza aktywne okno device-confirm w chwili capture, ale nie
 rozróżnia APP-confirm od RSSI-confirm.
 
-Na tym etapie nie ma popartego kodem kolejnego bajtu do zgadywania. Potrzebny
-jest porównawczy HCI snoop Mi Home obejmujący pierwszy bind tej samej sztuki.
+Powyższy stan badań został przekroczony 2026-09-08: publiczny LLVM bitcode
+standard-auth version 2 wskazuje kolejny opcode `0x13`, jeszcze przed odbiorem
+danych rejestracji. Zawiera też ich nowy format i weryfikacje podpisów. Dalsze
+badania bez Bluetooth opisano w [AUTH_V2.md](AUTH_V2.md).
 Minimalny wymagany wycinek zaczyna się od zapisu `15000000`, obejmuje wymianę
 obu punktów P-256 i kończy po pierwszej operacji następującej po ACK klucza
 urządzenia. Dopiero ten ślad rozstrzygnie, czy Mi Home wysyła inną komendę GATT,
@@ -246,7 +255,15 @@ to masa, tętno, impedancja 50/250 kHz, profil i stabilizacja.
 - [integracja Xiaomi BLE](https://www.home-assistant.io/integrations/xiaomi_ble/)
 - [PR/issue dodający S400](https://github.com/Bluetooth-Devices/xiaomi-ble/issues/158)
 
-Ta integracja HACS implementuje ten pasywny tor samodzielnie, dzięki czemu może
-też wykonać lokalny provisioning i zachować token dla późniejszego aktywnego GATT.
-Aktywny strumień pomiaru nie jest jeszcze wystawiony w HA; po provisioningu
-reklamy FE95 wystarczają do finalnego pomiaru.
+Ta integracja HACS implementuje oba tory. Z bindkey dekoduje reklamy FE95. Jeżeli
+wpis zawiera również 12-bajtowy token, reklama wybudzonej wagi uruchamia lokalne
+połączenie, login standard-auth i odbiór szyfrowanych ramek CMTP. CMTP przenosi
+bieżącą masę i stabilizację, a ramka końcowa także profil, czas oraz impedancje.
+Połączenie nie wymaga komunikacji sieciowej. Nadal nierozwiązane pozostaje
+uzyskanie podpisanego credentialu potrzebnego do pierwszej rejestracji auth v2.
+
+W osobnym 120-sekundowym teście niepowiązanej wagi zasubskrybowano `0x8002` i
+wszystkie charakterystyki notify FE95. Nie odebrano żadnego notification. Kod
+iOS znaleziony w publicznym repo, który nazywa `0x8002` kanałem masy, nie zawiera
+capture ani testu S400; jego komendy `0x8001` są opisane jako warianty protokołu
+i nie są wykonywane w gałęzi S400. Nie używamy ich jako podstawy integracji.

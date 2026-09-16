@@ -4,30 +4,37 @@
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 
 Eksperymentalna integracja HACS dla Xiaomi Body Composition Scale S400
-(`MJTZC01YM`, `yunmai.scales.ms103/ms104/ms107`). Provisioning, odbiór danych
-i przechowywanie kluczy odbywają się lokalnie. Integracja nie zawiera klienta
+(`MJTZC01YM`, `yunmai.scales.ms103/ms104/ms107`). Odbiór danych i przechowywanie
+kluczy odbywają się lokalnie; lokalny provisioning jest w trakcie badań.
+Integracja nie zawiera klienta
 Xiaomi Cloud i nie prosi o dane konta Xiaomi.
 
 > [!WARNING]
 > Projekt jest w fazie alpha. Pasywne dekodowanie MiBeacon ma testy, ale pełny
 > lokalny provisioning nie działa jeszcze na badanej S400 z firmware
-> `2.1.1_0006`. Rzeczywisty trace dochodzi do wymiany kluczy P-256; waga nie
-> odpowiada na kolejny nagłówek `SEND_DID`. Potrzebujemy porównawczego HCI snoop
-> z Mi Home, zanim flow pairingu będzie można uznać za gotowy.
+> `2.1.1_0006`, która zgłasza auth version 2. Analiza publicznego SDK wykazała
+> inną kolejność rejestracji oraz wymaganie podpisu i certyfikatu serwera.
+> Provisioner wykrywa tę wersję i zgłasza brak obsługi. Szczegółowe dowody,
+> granice zgodności z S400 i analiza bez Bluetooth: [AUTH_V2.md](research/AUTH_V2.md).
+> [Analiza oficjalnego APK Mi Home](research/MIHOME_V2.md) niezależnie
+> potwierdza tę kolejność i identyfikuje brakujące poświadczenie rejestracji.
 
 ## Stan implementacji
 
-- zaimplementowany, lecz jeszcze nieukończony na sprzęcie provisioning Mi Home
-  BLE standard-auth przez P-256 ECDH, HKDF-SHA256 i AES-CCM;
+- eksperymentalny provisioning standard-auth version 1 bez OOB przez P-256 ECDH,
+  HKDF-SHA256 i AES-CCM; version 2 nie jest jeszcze obsługiwana;
+- analiza captures bez Bluetooth i testowany offline format credentialu v2;
 - zapis 16-bajtowego bindkey i 12-bajtowego tokenu dopiero po odpowiedzi
   rejestracyjnej urządzenia i poprawnym loginie;
 - odszyfrowywanie MiBeacon v4/v5 oraz encje: masa, tętno, impedancja 50 kHz,
   impedancja 250 kHz, profil użytkownika, stabilizacja i RSSI;
+- automatyczne połączenie po wybudzeniu wagi, login tokenem i lokalny odbiór
+  bieżących oraz końcowych pomiarów z szyfrowanego kanału CMTP;
 - redagowanie sekretów z diagnostyki Home Assistanta;
 - samodzielne narzędzia do GATT trace i pairingu na Raspberry Pi OS/Debianie.
 
-Kod standard-auth jest potwierdzony przez implementacje open source. Akceptacja
-tego wariantu przez każdą wersję firmware S400 wymaga jeszcze testu na sprzęcie.
+Starsza sekwencja standard-auth pochodzi z analizy implementacji open source.
+Nie jest zgodna z całą procedurą wersji 2 znalezioną w publicznym SDK.
 Integracja zgłasza sukces dopiero po odpowiedzi `0x11000000` i poprawnym loginie,
 więc nie zapisze losowych, nieuzgodnionych kluczy.
 
@@ -38,17 +45,28 @@ więc nie zapisze losowych, nieuzgodnionych kluczy.
 2. Pobierz **Xiaomi S400 Local** i uruchom ponownie Home Assistant.
 3. Wybudź wagę i wybierz
    **Ustawienia → Urządzenia i usługi → Dodaj integrację → Xiaomi S400 Local**.
-4. Jeżeli masz już bindkey, wybierz `Existing keys`.
+4. Jeżeli masz już bindkey i token, wybierz `Existing keys`. Token uruchamia
+   automatyczny aktywny odbiór GATT; bez niego pozostaje odbiór reklam FE95.
 
 Opcja `Local provisioning` jest obecnie przeznaczona do eksperymentów i zapisze
 klucze tylko wtedy, gdy waga potwierdzi rejestrację oraz późniejszy login. Do
-pasywnych reklam token nie jest potrzebny.
+pasywnych reklam token nie jest potrzebny. Automatyczny aktywny strumień GATT
+wymaga tokenu.
 
 Instalacja ręczna polega na skopiowaniu katalogu
 `custom_components/xiaomi_s400_local` do katalogu `custom_components`
 instancji Home Assistanta i ponownym uruchomieniu HA.
 
 ## Pierwszy trace diagnostyczny
+
+Istniejące captures można przeanalizować w WSL bez adaptera Bluetooth:
+
+```bash
+uv run python tools/s400_analyze_trace.py captures/s400-pair*.jsonl
+```
+
+Wynik zawiera wersję auth, informację o wymianie kluczy i kolejności `0x13`
+względem danych rejestracji. Nie ujawnia surowych ramek ani kluczy.
 
 Na Raspberry Pi OS lub Debianie:
 
@@ -84,6 +102,9 @@ Nazwa dystrybucji `Ubuntu` w ścieżce może być inna; pokaże ją `wsl -l -v`.
 Pliki na Windows dziedziczą ACL katalogu zamiast uniksowego trybu `0600`.
 
 ## Samodzielny lokalny pairing
+
+Dotyczy wyłącznie eksperymentalnej ścieżki GET_INFO version 1 bez OOB.
+Badana S400 zgłasza version 2 i otrzyma komunikat o braku obsługi.
 
 Po factory resecie i wybudzeniu wagi:
 

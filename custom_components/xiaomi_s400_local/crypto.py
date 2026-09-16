@@ -93,3 +93,12 @@ def derive_login_keys(
 def login_hmac(key: bytes, data: bytes) -> bytes:
     """Return the SHA-256 HMAC used by the login challenge."""
     return hmac.new(key, data, sha256).digest()
+
+
+def decrypt_cmtp(keys: SessionKeys, message: bytes) -> bytes:
+    """Authenticate and decrypt one complete device-to-client CMTP message."""
+    if len(message) < 6:
+        raise ValueError("CMTP message is shorter than its counter and tag")
+    counter = message[:2]
+    nonce = keys.device_iv + bytes(4) + counter + bytes(2)
+    return AESCCM(keys.device_key, tag_length=4).decrypt(nonce, message[2:], None)

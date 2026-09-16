@@ -9,7 +9,8 @@
       "device_not_found": "The scale is not currently reachable. Wake it and retry.",
       "invalid_address": "Enter a six-byte Bluetooth MAC address.",
       "invalid_key": "Bindkey must be 32 hex characters and token, when supplied, 24 hex characters.",
-      "pairing_failed": "The scale rejected or did not complete local provisioning. Reset and wake it, then retry."
+      "pairing_failed": "The scale rejected or did not complete local provisioning. Reset and wake it, then retry.",
+      "registration_unsupported": "Local pairing does not yet support this protocol version. Resetting again will not help. If you already have a bindkey, choose Existing keys."
     },
     "step": {
       "user": {
@@ -26,7 +27,7 @@
       },
       "keys": {
         "title": "Use existing local credentials",
-        "description": "The 16-byte bindkey is enough for passive measurements. The 12-byte token is optional and retained for future active GATT support.",
+        "description": "The 16-byte bindkey enables passive advertisements. Add the 12-byte token to make Home Assistant connect when the scale wakes and receive automatic live and final measurements over GATT.",
         "data": {
           "bindkey": "Bindkey (32 hex characters)",
           "token": "Login token (24 hex characters, optional)"
