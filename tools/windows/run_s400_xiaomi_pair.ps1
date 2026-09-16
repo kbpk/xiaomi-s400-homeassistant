@@ -4,16 +4,20 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 
-& uv run --python 3.12 --no-project `
-    --with-requirements (Join-Path $repo "requirements-lab.txt") `
-    (Join-Path $repo "tools\s400_xiaomi_pair.py") `
-    --region $Region `
-    --output (Join-Path $repo "private\s400-secrets.json") `
-    --trace (Join-Path $repo "captures\s400-xiaomi-pair.jsonl")
-
-$exitCode = $LASTEXITCODE
+try {
+    & uv run --python 3.12 --no-project `
+        --with-requirements (Join-Path $repo "requirements-lab.txt") `
+        (Join-Path $repo "tools\s400_xiaomi_pair.py") `
+        --region $Region `
+        --output (Join-Path $repo "private\s400-secrets.json") `
+        --trace (Join-Path $repo "captures\s400-xiaomi-pair.jsonl")
+    $exitCode = $LASTEXITCODE
+} catch {
+    Write-Host $_ -ForegroundColor Red
+    $exitCode = 1
+}
 Write-Host ""
 if ($exitCode -eq 0) {
     Write-Host "Provisioning completed successfully." -ForegroundColor Green
