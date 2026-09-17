@@ -292,6 +292,10 @@ class XiaomiCloudClient:
             captcha_url = auth.get("captchaUrl")
             if isinstance(captcha_url, str) and captcha_url:
                 absolute_url = urljoin(LOGIN_URL, captcha_url)
+                if captcha_code is not None:
+                    raise XiaomiAuthenticationError(
+                        "Xiaomi rejected the submitted captcha"
+                    )
                 if self._captcha_callback is None or attempts >= 4:
                     raise XiaomiCaptchaRequired(absolute_url)
                 captcha_code = self._captcha_callback(self._request(absolute_url))
@@ -319,6 +323,124 @@ class XiaomiCloudClient:
             if not self._service_token:
                 raise XiaomiAuthenticationError("Xiaomi did not issue a service token")
             return
+
+    def login_via_browser(self, cdp_url: str) -> None:
+        """Create an API session from a user-authenticated Chromium profile."""
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as error:
+            raise XiaomiCloudError(
+                "Browser login requires the playwright package"
+            ) from error
+
+        with sync_playwright() as playwright:
+            try:
+                browser = playwright.chromium.connect_over_cdp(
+                    cdp_url, timeout=round(self.timeout * 1000)
+                )
+            except Exception as error:
+                raise XiaomiCloudError(
+                    "Could not connect to the local browser login session"
+                ) from error
+            contexts = browser.contexts
+            if not contexts:
+                raise XiaomiCloudError("The local browser has no active context")
+            context = contexts[0]
+            page = context.pages[0] if context.pages else context.new_page()
+            account_cookies = context.cookies(["https://account.xiaomi.com/"])
+            if not any(
+                cookie.get("name") == "passToken" and cookie.get("value")
+                for cookie in account_cookies
+            ):
+                raise XiaomiAuthenticationError(
+                    "Dedicated browser login is not complete; no request was sent"
+                )
+
+            page.goto(
+                LOGIN_URL + "?" + urlencode({"sid": "xiaomiio", "_json": "true"}),
+                wait_until="domcontentloaded",
+                timeout=round(self.timeout * 1000),
+            )
+            first = _json_response(page.locator("body").inner_text().encode())
+            sign = first.get("_sign")
+            if not isinstance(sign, str) or not sign:
+                raise XiaomiAuthenticationError(
+                    "Browser session did not issue a login signature"
+                )
+
+            fields = {
+                "sid": str(first.get("sid") or "xiaomiio"),
+                "hash": hashlib.md5(self._password.encode()).hexdigest().upper(),  # noqa: S324
+                "callback": str(first.get("callback") or LOGIN_CALLBACK),
+                "qs": str(first.get("qs") or "%3Fsid%3Dxiaomiio%26_json%3Dtrue"),
+                "user": self.username,
+                "_sign": sign,
+                "_json": "true",
+            }
+            with page.expect_navigation(
+                wait_until="domcontentloaded",
+                timeout=round(self.timeout * 1000),
+            ):
+                page.evaluate(
+                    """fields => {
+                        const form = document.createElement("form");
+                        form.method = "POST";
+                        form.action = "https://account.xiaomi.com/pass/serviceLoginAuth2";
+                        for (const [name, value] of Object.entries(fields)) {
+                            const input = document.createElement("input");
+                            input.type = "hidden";
+                            input.name = name;
+                            input.value = value;
+                            form.appendChild(input);
+                        }
+                        document.body.appendChild(form);
+                        form.submit();
+                    }""",
+                    fields,
+                )
+            auth = _json_response(page.locator("body").inner_text().encode())
+            notification_url = auth.get("notificationUrl")
+            if isinstance(notification_url, str) and notification_url:
+                raise XiaomiVerificationRequired(notification_url)
+            captcha_url = auth.get("captchaUrl")
+            if isinstance(captcha_url, str) and captcha_url:
+                raise XiaomiCaptchaRequired(urljoin(LOGIN_URL, captcha_url))
+
+            location = auth.get("location")
+            ssecurity = auth.get("ssecurity")
+            user_id = auth.get("userId")
+            if not all(
+                isinstance(value, (str, int)) and str(value)
+                for value in (location, ssecurity, user_id)
+            ):
+                raise XiaomiAuthenticationError(
+                    "Xiaomi rejected the browser-backed account login"
+                )
+            location_host = urlparse(str(location)).hostname or ""
+            if not location_host.endswith((".mi.com", ".xiaomi.com")):
+                raise XiaomiAuthenticationError(
+                    "Xiaomi returned an invalid browser login redirect"
+                )
+            page.goto(
+                str(location),
+                wait_until="domcontentloaded",
+                timeout=round(self.timeout * 1000),
+            )
+            service_token = next(
+                (
+                    cookie["value"]
+                    for cookie in context.cookies([str(location)])
+                    if cookie.get("name") == "serviceToken"
+                ),
+                None,
+            )
+            if not service_token:
+                raise XiaomiAuthenticationError(
+                    "Browser login did not issue a service token"
+                )
+            self._ssecurity = str(ssecurity)
+            self._user_id = str(user_id)
+            self._service_token = service_token
 
     def _api_url(self, path: str) -> str:
         prefix = "" if self.region == "cn" else f"{self.region}."

@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 from s400_xiaomi_pair import _did_bytes  # noqa: E402
 from xiaomi_cloud import (  # noqa: E402
+    XiaomiAuthenticationError,
     XiaomiCloudClient,
     XiaomiCloudError,
     _decode_urlsafe,
@@ -41,6 +42,31 @@ class _LoginFixtureClient(XiaomiCloudClient):
 
     def _cookie(self, name: str) -> str | None:
         return "service-token" if name == "serviceToken" else None
+
+
+class _RejectedCaptchaClient(_LoginFixtureClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.auth_attempts = 0
+
+    def _request(
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        fields: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> bytes:
+        self.requests.append((url, method, fields))
+        if "serviceLoginAuth2" in url:
+            self.auth_attempts += 1
+            code = 0 if self.auth_attempts == 1 else 87001
+            return (
+                f'&&&START&&&{{"code":{code},"captchaUrl":"/pass/captcha.jpg"}}'
+            ).encode()
+        if "captcha.jpg" in url:
+            return b"image"
+        return b'&&&START&&&{"sid":"xiaomiio","_sign":"signed"}'
 
 
 def test_rc4_matches_published_vector() -> None:
@@ -92,6 +118,24 @@ def test_login_keeps_plaintext_password_out_of_requests() -> None:
     assert auth_fields is not None
     assert auth_fields["hash"] == "9A0EF3ECF101A8B0856F98EB6B2E2C24"
     assert "plain-password" not in json.dumps(client.requests)
+
+
+def test_login_stops_after_one_rejected_captcha() -> None:
+    prompts = 0
+
+    def solve(_image: bytes) -> str:
+        nonlocal prompts
+        prompts += 1
+        return "entered-once"
+
+    client = _RejectedCaptchaClient()
+    client._captcha_callback = solve
+
+    with pytest.raises(XiaomiAuthenticationError, match="rejected"):
+        client.login()
+
+    assert prompts == 1
+    assert client.auth_attempts == 2
 
 
 def test_bind_response_decodes_production_field_shapes() -> None:

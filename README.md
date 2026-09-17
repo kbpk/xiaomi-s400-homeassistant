@@ -142,13 +142,19 @@ pliku `s400-secrets.json`.
 To jest praktyczna ścieżka dla factory-new S400, gdy lokalny test certyfikatu
 kończy się `REGISTER_ERROR`. Token i bindkey nadal powstają lokalnie z ECDH.
 Do Xiaomi trafiają MAC, model, token i bindkey, tak jak w Mi Home; serwer zwraca
-DID, certyfikat oraz podpis `DID || bindkey || UTC`. Skrypt sprawdza łańcuch
-podpisów przed wysłaniem credentialu do wagi, a po rejestracji sprawdza token
-lokalnym loginem GATT.
+DID, certyfikat oraz podpis `DID || bindkey || UTC`. Skrypt sprawdza ten podpis
+kluczem z otrzymanego certyfikatu. Produkcyjny certyfikat
+nie pasuje do publicznego root key z SDK, dlatego ostateczną walidację root wykonuje
+S400; jej wynikiem jest `REGISTER_OK` albo `REGISTER_ERROR`. Po rejestracji skrypt
+sprawdza token lokalnym loginem GATT.
 
-Na Windows z ASUS USB-BT400 uruchom narzędzie w zwykłym PowerShellu. Login i
-hasło są odczytywane interaktywnie; hasło, cookies i odpowiedzi API nie trafiają
-do argumentów, trace'u ani pliku wynikowego:
+Na Windows z ASUS USB-BT400 uruchom narzędzie w zwykłym PowerShellu. Launcher
+otwiera dedykowany profil Edge na aktualnej stronie konta Xiaomi. Zakończ w nim
+logowanie oraz ewentualną weryfikację e-mail, a dopiero potem wróć do terminala.
+Przed wysłaniem żądania provisioner wymaga cookie `passToken`; niedokończone
+logowanie kończy się lokalnym błędem i nie generuje kolejnego kodu. Login i hasło
+są odczytywane interaktywnie; hasło, cookies i odpowiedzi API nie trafiają do
+argumentów, trace'u ani pliku wynikowego:
 
 ```powershell
 $repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
@@ -157,9 +163,10 @@ $repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
 
 Region musi odpowiadać regionowi konta Mi Home. Dla konta używanego w Polsce
 typową wartością jest `de`; dostępne są też `cn`, `us`, `ru`, `tw`, `sg`, `in`
-i `i2`. Jeśli Xiaomi zażąda weryfikacji konta, skrypt pokaże URL do otwarcia w
-przeglądarce i po zakończeniu spróbuje ponownie. Captcha jest obecnie jawnie
-wyświetlana z pliku tymczasowego i przesyłana po wpisaniu odpowiedzi.
+i `i2`. Dedykowany profil znajduje się lokalnie w
+`%LOCALAPPDATA%\XiaomiS400Provisioner\EdgeProfile`, dzięki czemu cookies
+przetrwają ponowne uruchomienie po czasowym limicie Xiaomi. Skrypt nie ponawia
+automatycznie odrzuconej captchy.
 
 Po sukcesie Xiaomi nie jest potrzebne do działania integracji. W Home Assistant
 wprowadź 32 znaki `bindkey` i 24 znaki `token` z pliku wynikowego. Narzędzie nie

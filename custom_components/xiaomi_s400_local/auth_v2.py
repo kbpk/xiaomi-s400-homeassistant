@@ -47,7 +47,14 @@ class RegistrationCredentialV2:
     def verify_signatures(
         self, bindkey: bytes, *, root_public_xy: bytes = SDK_ROOT_PUBLIC_XY
     ) -> None:
-        """Check root -> server and server -> registration signatures.
+        """Check root -> server and server -> registration signatures."""
+        self.verify_certificate_signature(root_public_xy=root_public_xy)
+        self.verify_registration_signature(bindkey)
+
+    def verify_certificate_signature(
+        self, *, root_public_xy: bytes = SDK_ROOT_PUBLIC_XY
+    ) -> None:
+        """Check the server certificate against a supplied P-256 root.
 
         A custom root is for isolated tests. It does not replace the root in
         device firmware. No claim is made about certificate validity policy.
@@ -63,6 +70,10 @@ class RegistrationCredentialV2:
             certificate.tbs_certificate_bytes,
             ec.ECDSA(hashes.SHA256()),
         )
+
+    def verify_registration_signature(self, bindkey: bytes) -> None:
+        """Check that the certificate key signed DID, bindkey and UTC."""
+        certificate = x509.load_der_x509_certificate(self.certificate_der)
         server = certificate.public_key()
         if not isinstance(server, ec.EllipticCurvePublicKey) or not isinstance(
             server.curve, ec.SECP256R1

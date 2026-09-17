@@ -11,13 +11,18 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
+import json
 import os
 import sys
 import tempfile
+from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
 
+from cryptography import x509
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
 from xiaomi_cloud import (
     REGIONS,
     XiaomiCaptchaRequired,
@@ -108,6 +113,28 @@ def _captcha_prompt(image: bytes) -> str:
         path.unlink(missing_ok=True)
 
 
+def _write_error_status(path: Path, category: str, exit_code: int) -> None:
+    """Persist only a non-sensitive failure category for WSL diagnostics."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "category": category,
+                    "exit_code": exit_code,
+                    "occurred_at": datetime.now(UTC).isoformat(),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        if os.name != "nt":
+            path.chmod(0o600)
+    except OSError:
+        pass
+
+
 async def run(args: argparse.Namespace, password: str) -> int:
     pairing, protocol, crypto, auth_v2 = load_core()
     cloud = XiaomiCloudClient(
@@ -119,7 +146,10 @@ async def run(args: argparse.Namespace, password: str) -> int:
         timeout=args.cloud_timeout,
     )
     print(f"Logging in to Xiaomi region {args.region} for one-time signing...")
-    await asyncio.to_thread(cloud.login)
+    if args.browser_cdp:
+        await asyncio.to_thread(cloud.login_via_browser, args.browser_cdp)
+    else:
+        await asyncio.to_thread(cloud.login)
     print("Xiaomi account session established. Searching for S400...")
 
     device, product_id = await pairing.find_s400(address=args.address)
@@ -183,7 +213,27 @@ async def run(args: argparse.Namespace, password: str) -> int:
                 utc=bind.utc.to_bytes(4, "little"),
                 certificate_der=bind.certificate_der,
             )
-            credential.verify_signatures(setup.bindkey)
+            credential.verify_registration_signature(setup.bindkey)
+            certificate = x509.load_der_x509_certificate(bind.certificate_der)
+            certificate_fingerprint = certificate.fingerprint(hashes.SHA256()).hex()
+            try:
+                credential.verify_certificate_signature()
+            except InvalidSignature:
+                trace.record(
+                    "sdk_root_mismatch",
+                    certificate_sha256=certificate_fingerprint,
+                )
+                if args.require_sdk_root:
+                    raise
+                print(
+                    "Production certificate does not match the public SDK root; "
+                    "the S400 will perform the authoritative root check."
+                )
+            else:
+                trace.record(
+                    "sdk_root_verified",
+                    certificate_sha256=certificate_fingerprint,
+                )
             encrypted = credential.encrypt(setup.did_key)
             trace.record(
                 "xiaomi_credential_verified",
@@ -251,17 +301,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output", type=Path, default=Path("private/s400-secrets.json")
     )
+    parser.add_argument(
+        "--error-status",
+        type=Path,
+        default=Path("private/s400-last-error.json"),
+        help="non-sensitive machine-readable failure category",
+    )
     parser.add_argument("--protocol-timeout", type=float, default=12.0)
     parser.add_argument("--cloud-timeout", type=float, default=20.0)
+    parser.add_argument(
+        "--browser-cdp",
+        help="use an already authenticated Chromium/Edge CDP session",
+    )
+    parser.add_argument(
+        "--require-sdk-root",
+        action="store_true",
+        help="abort unless the certificate matches the root from the public SDK",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    args.error_status.unlink(missing_ok=True)
     if not args.username:
         args.username = input("Xiaomi account ID/email: ").strip()
     if not args.username:
         print("Xiaomi account ID/email cannot be empty", file=sys.stderr)
+        _write_error_status(args.error_status, "empty_username", 2)
         return 2
     password = getpass.getpass("Xiaomi account password (not stored): ")
     try:
@@ -269,15 +336,19 @@ def main() -> int:
     except XiaomiVerificationRequired as error:
         print("Account verification is still required:", file=sys.stderr)
         print(error.url, file=sys.stderr)
+        _write_error_status(args.error_status, "account_verification_required", 2)
         return 2
     except XiaomiCaptchaRequired as error:
         print("Xiaomi account captcha could not be completed.", file=sys.stderr)
         print(error.url, file=sys.stderr)
+        _write_error_status(args.error_status, "account_captcha_required", 2)
         return 2
     except KeyboardInterrupt:
+        _write_error_status(args.error_status, "interrupted", 130)
         return 130
     except Exception as error:
         print(f"s400_xiaomi_pair: {error}", file=sys.stderr)
+        _write_error_status(args.error_status, type(error).__name__, 1)
         return 1
 
 

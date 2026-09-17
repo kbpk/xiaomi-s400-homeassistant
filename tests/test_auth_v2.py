@@ -147,6 +147,9 @@ def test_v2_signature_binds_did_bindkey_and_utc() -> None:
         credential.verify_signatures(bytes(16), root_public_xy=root)
     with pytest.raises(InvalidSignature):
         credential.verify_signatures(bindkey)  # Own CA fails the SDK trust anchor.
+    credential.verify_registration_signature(bindkey)
+    with pytest.raises(InvalidSignature):
+        credential.verify_certificate_signature()
 
 
 def test_v2_payload_is_92_bytes_and_authenticated() -> None:
