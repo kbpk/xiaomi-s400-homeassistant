@@ -170,6 +170,39 @@ class S400ConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Update the bindkey/token of an existing entry without re-adding it."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                bindkey = _normalise_hex(user_input[CONF_BINDKEY], 16)
+                token_input = user_input.get(CONF_TOKEN, "")
+                token = _normalise_hex(token_input, 12) if token_input else ""
+            except ValueError:
+                errors["base"] = "invalid_key"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={CONF_BINDKEY: bindkey, CONF_TOKEN: token},
+                )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_BINDKEY, default=entry.data.get(CONF_BINDKEY, "")
+                    ): str,
+                    vol.Optional(
+                        CONF_TOKEN, default=entry.data.get(CONF_TOKEN, "")
+                    ): str,
+                }
+            ),
+            errors=errors,
+        )
+
     async def async_step_bluetooth(self, discovery_info) -> ConfigFlowResult:
         pid = product_id_from_service_data(
             discovery_info.service_data.get(MIBEACON_UUID)

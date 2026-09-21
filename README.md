@@ -190,6 +190,104 @@ Details of the protocol, the state of evidence and the capture workflow are in
 [`research/PROTOCOL.md`](research/PROTOCOL.md) and
 [`research/CAPTURE.md`](research/CAPTURE.md).
 
+## Supported devices
+
+| Model | Marketing name | Notes |
+|---|---|---|
+| `MJTZC01YM` | Xiaomi Body Composition Scale S400 (`yunmai.scales.ms103` / `ms104` / `ms107`) | Weight, heart rate, dual-frequency impedance, profile id. Broadcasts encrypted MiBeacon v4/v5 and needs a bindkey. |
+
+The parser recognises the product ids `0x30D9`, `0x3BD5` and `0x48CF`. The scale
+is a "sleepy" device: it only advertises around a weigh-in.
+
+## Supported functionality
+
+One device with these entities:
+
+- `sensor.weight` — last stabilised weight (kg)
+- `sensor.heart_rate` — heart rate (bpm), when measured barefoot
+- `sensor.impedance_50_khz` — low-frequency impedance (Ω)
+- `sensor.impedance_250_khz` — high-frequency impedance (Ω)
+- `sensor.profile_id` — scale user slot the reading was assigned to
+- `sensor.signal_strength` — RSSI (diagnostic, disabled by default)
+- `binary_sensor.measurement_stabilized` — measurement cycle finished
+
+Body-composition metrics (BMI, body fat, muscle, water, …) are not computed
+here. Feed weight and both impedances into
+[`bodymiscale`](https://github.com/dckiller51/bodymiscale) (dual-frequency S400
+mode) for that.
+
+## How data is updated
+
+The integration is push-based (`iot_class: local_push`). It listens for the
+scale's encrypted MiBeacon advertisements and updates the entities as frames
+arrive. A barefoot weigh-in produces two measurement frames (weight + 50 kHz
+impedance + heart rate, then 250 kHz impedance). If a 12-byte login token is
+configured, an authenticated GATT session is also consumed for live and final
+measurements. Values are restored after a Home Assistant restart. There is no
+polling and no cloud connection.
+
+## Use cases
+
+- Track a weight/composition trend with long-term statistics, independent of the
+  Xiaomi Cloud.
+- Automate on a finished measurement, for example:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.xiaomi_s400_measurement_stabilized
+    to: "on"
+actions:
+  - action: notify.mobile_app_phone
+    data:
+      message: >-
+        {{ states('sensor.xiaomi_s400_weight') }} kg
+```
+
+## Configuration parameters
+
+- **Bluetooth address** — the scale's six-byte address.
+- **Bindkey** (16 bytes / 32 hex) — decrypts the advertisements. Required.
+- **Login token** (12 bytes / 24 hex) — optional; only for the active GATT stream.
+
+Both credentials can be updated later through **Reconfigure** on the config entry.
+
+## Removal
+
+1. **Settings → Devices & services → Xiaomi S400 Local → Delete** to remove the
+   config entry (this stops the Bluetooth listener).
+2. Optionally delete the `custom_components/xiaomi_s400_local` folder (or remove
+   it through HACS) and restart Home Assistant.
+3. Historical statistics remain in the recorder after removal; purge them with
+   `recorder.purge_entities` if desired.
+
+## Troubleshooting
+
+- **No entities / only signal strength** — the scale has not been paired in the
+  Xiaomi Home app yet, so it never minted a bindkey. Pair it once, extract the
+  bindkey, then add the integration.
+- **No data while the phone app is open** — the app holds the GATT connection
+  and the scale stops broadcasting. Close the app (or its Bluetooth) while
+  weighing.
+- **`invalid_address` / `invalid_key`** — check the six-byte MAC and that the
+  bindkey is 32 hex characters, the token 24.
+- **Weak/flickering signal** — the S400 is sleepy and low power. Move a
+  Bluetooth proxy closer, or prefer a local adapter over a distant proxy.
+- **`registration_unsupported`** — the scale reports auth version 2, for which a
+  fully local first pairing is not possible (it needs a one-time Xiaomi-signed
+  credential). Use **Existing keys** with a bindkey from the token extractor.
+
+## Known limitations
+
+- The bindkey must be extracted once from the Xiaomi Cloud
+  ([Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor));
+  the email/password re-auth inside Home Assistant is unreliable for the S400.
+- Body-composition metrics are not computed locally; use `bodymiscale`.
+- Auth version 2 first-bind cannot be done fully offline (see Troubleshooting).
+- The optional active GATT stream needs a connectable adapter/proxy and a valid
+  token; it is not required for weight, heart rate or impedance, which all
+  arrive passively.
+
 ## Development
 
 ```bash
