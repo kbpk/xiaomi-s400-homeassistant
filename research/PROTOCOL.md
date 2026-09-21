@@ -1,10 +1,10 @@
 # S400: stan protokołu i dowody
 
-Aktualizacja 2026-09-08: [analiza standard-auth v2](AUTH_V2.md) rozstrzyga
+Aktualizacja 2026-09-21: [analiza standard-auth v2](AUTH_V2.md) rozstrzyga
 znaczenie `02000000` i znajduje różnicę kolejności oraz podpisy serwera w
-publicznym SDK. To zastępuje wcześniejszą hipotezę, że lokalne ECDH i sam DID
-wystarczą także na badanej S400. Dalsza zgodność SDK z firmware S400 wymaga
-potwierdzenia. Poniżej pozostaje historia eksperymentów z zaznaczonymi korektami.
+publicznym SDK. Produkcyjny credential przeszedł obie lokalne weryfikacje,
+S400 zwróciła `REGISTER_OK`, a token przeszedł późniejszy lokalny login.
+Poniżej pozostaje historia eksperymentów z zaznaczonymi korektami.
 
 „Potwierdzone” oznacza kod urządzenia/klienta open source
 albo działający capture opisany przez autora implementacji. Zachowanie konkretnej
@@ -118,6 +118,11 @@ sam kod błędu S400 nie rozróżnia, która z nich zakończyła się niepowodze
 **C pozostaje niepotwierdzona:** nie znaleziono w tym SDK alternatywnej ścieżki
 rejestracji bez podpisu serwera. Dokładny format, publiczny root i odtwarzalne
 źródło znajdują się w [AUTH_V2.md](AUTH_V2.md).
+
+Próba produkcyjna potwierdziła praktyczną ścieżkę B: jednorazowe podpisanie
+credentialu przez Xiaomi, następnie `REGISTER_OK` i lokalny login GATT. Token
+i bindkey nadal powstają lokalnie podczas ECDH; Xiaomi nie jest potrzebne po
+zakończeniu rejestracji.
 
 ## Wynik pierwszego capture na sprzęcie
 
@@ -237,10 +242,24 @@ Powyższy stan badań został przekroczony 2026-09-08: publiczny LLVM bitcode
 standard-auth version 2 wskazuje kolejny opcode `0x13`, jeszcze przed odbiorem
 danych rejestracji. Zawiera też ich nowy format i weryfikacje podpisów. Dalsze
 badania bez Bluetooth opisano w [AUTH_V2.md](AUTH_V2.md).
-Minimalny wymagany wycinek zaczyna się od zapisu `15000000`, obejmuje wymianę
-obu punktów P-256 i kończy po pierwszej operacji następującej po ACK klucza
-urządzenia. Dopiero ten ślad rozstrzygnie, czy Mi Home wysyła inną komendę GATT,
-czeka na zmianę stanu urządzenia, czy wykonuje dodatkowy krok poza BLE.
+
+## Udany provisioning auth v2
+
+Próba z 2026-09-21 zamknęła brakujący fragment na tej samej S400:
+
+1. Greeting wynegocjował DMTU `0xF2` = 242 bajty danych; z dwubajtowym numerem
+   pełna ramka GATT ma 244 bajty. Krótsza nieostatnia ramka była zgłaszana jako
+   utracona, co wyjaśnia wcześniejsze `A_LOST` dla ramki 1.
+2. Produkcyjny certyfikat długości 379 bajtów przeszedł w dwóch ramach i dostał
+   `RCV_OK`.
+3. DID długości 19 bajtów został dopełniony zerem z lewej strony do 20 bajtów,
+   zgodnie z kodem `xf6.OooOo0O` w Mi Home.
+4. Certyfikat i podpis credentialu przeszły lokalną walidację.
+5. S400 zwróciła `11000000` (`REGISTER_OK`), a nowa sesja loginu tokenem
+   zakończyła się `21000000` (`LOGIN_OK`).
+
+Trace i plik sekretów pozostają ignorowane przez Git. Analizator raportuje
+tylko metadane protokołu i potwierdzenia, bez MAC, DID, tokenu ani bindkey.
 
 ## Home Assistant
 
@@ -260,7 +279,8 @@ wpis zawiera również 12-bajtowy token, reklama wybudzonej wagi uruchamia lokal
 połączenie, login standard-auth i odbiór szyfrowanych ramek CMTP. CMTP przenosi
 bieżącą masę i stabilizację, a ramka końcowa także profil, czas oraz impedancje.
 Połączenie nie wymaga komunikacji sieciowej. Nadal nierozwiązane pozostaje
-uzyskanie podpisanego credentialu potrzebnego do pierwszej rejestracji auth v2.
+całkowicie lokalne wystawienie podpisanego credentialu do pierwszej rejestracji
+auth v2; działająca ścieżka uzyskuje go jednorazowo z Xiaomi.
 
 W osobnym 120-sekundowym teście niepowiązanej wagi zasubskrybowano `0x8002` i
 wszystkie charakterystyki notify FE95. Nie odebrano żadnego notification. Kod

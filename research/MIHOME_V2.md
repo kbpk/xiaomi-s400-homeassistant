@@ -36,6 +36,8 @@ Ta ścieżka:
 2. Callback `_m_j.zs0`, gałąź v2, odczytuje `success`, `cloud_cert`,
    `cloud_sign` i `utc` z obiektu odpowiedzi.
 3. Tworzy plaintext[88]: DID[20], podpis[64], UTC[4] **little-endian**.
+   Gdy tekstowy DID ma mniej niż 20 bajtów, `xf6.OooOo0O(20, did)` dopełnia
+   go zerami **z lewej strony**.
 4. Szyfruje go kluczem did_key, nonce `10..1b`, AAD `devID`.
 5. `_m_j.at0`, gałąź 1, wywołuje `OooOO0.OooOo0(..., true, ...)`,
    która wysyła `13 00 00 00` przez `writeNoRsp` na charakterystykę komend.
@@ -117,10 +119,11 @@ RC4 po odrzuceniu pierwszych 1024 bajtów strumienia i podpis SHA-1 pól koperty
 Region `cn` nie ma prefiksu. Implementacja ograniczona do dwóch endpointów jest
 w `tools/xiaomi_cloud.py`.
 
-Nie przechwycono jeszcze udanego żądania z konta ani odpowiedzi dla tej S400,
-więc zgodność bieżącego backendu tych dwóch endpointów pozostaje do testu na
-sprzęcie. Narzędzie używa bezpośredniego HTTPS i systemowego magazynu CA; piny
-APK nie biorą udziału, ponieważ Mi Home nie pośredniczy w żądaniu.
+Test sprzętowy z 2026-09-21 potwierdził oba endpointy na koncie produkcyjnym.
+Zwrócony credential przeszedł lokalną weryfikację certyfikatu i podpisu, S400
+zwróciła `REGISTER_OK`, a następnie zaakceptowała lokalny login tokenem.
+Narzędzie używa bezpośredniego HTTPS i systemowego magazynu CA; piny APK nie
+biorą udziału, ponieważ Mi Home nie pośredniczy w żądaniu.
 
 Pole `smac` zostało rozstrzygnięte przez przepływ danych w APK. Parser
 `MiotBleAdvPacket` czyta MAC obecny w FE95, odwraca kolejność sześciu bajtów i
@@ -154,15 +157,15 @@ Informacja katalogowa jest tropem do pozyskania pliku, nie dowodem jego zawarto�
 1. loguje się do `sid=xiaomiio`, nie zapisując hasła ani cookies;
 2. wykonuje ECDH z wagą i lokalnie wyprowadza token, bindkey oraz did_key;
 3. wywołuje `bltapplydid`, a następnie `ble_standard_bind`;
-4. przed wysłaniem odpowiedzi sprawdza certyfikat względem publicznego root key
-   z SDK i podpis danych względem klucza z certyfikatu;
+4. dopełnia DID zerami z lewej strony do 20 bajtów, jak `xf6.OooOo0O` w APK,
+   po czym sprawdza certyfikat względem publicznego root key z SDK i podpis
+   danych względem klucza z certyfikatu;
 5. wysyła typ 0 i typ 7, wymaga `REGISTER_OK`, wykonuje lokalny login tokenem i
    dopiero wtedy zapisuje sekrety z prawami `0600`.
 
 Jest to świadome odejście od celu „zero Xiaomi podczas pierwszego bindu”. Po
-udanym bindzie ścieżka pomiarowa pozostaje całkowicie lokalna. Na dzień tej
-aktualizacji klient ma testy jednostkowe koperty i walidacji danych, ale nie ma
-jeszcze udanego wyniku z produkcyjnego konta i S400.
+udanym bindzie ścieżka pomiarowa pozostaje całkowicie lokalna. Przebieg został
+potwierdzony na produkcyjnym koncie i badanej S400.
 
 ## Odtworzenie analizy APK
 

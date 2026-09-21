@@ -203,7 +203,13 @@ class _GattTransport:
                 f"{context}: expected {expected.hex()}, received {actual.hex()}"
             )
 
-    async def send_parcel(self, value: bytes, *, chunk_size: int | None = None) -> None:
+    async def send_parcel(
+        self,
+        value: bytes,
+        *,
+        chunk_size: int | None = None,
+        inter_frame_delay: float = 0.03,
+    ) -> None:
         actual_chunk_size = chunk_size or self.parcel_chunk_size
         for frame_number, offset in enumerate(
             range(0, len(value), actual_chunk_size), start=1
@@ -213,7 +219,7 @@ class _GattTransport:
                 frame_number.to_bytes(2, "little")
                 + value[offset : offset + actual_chunk_size],
             )
-            await asyncio.sleep(0.03)
+            await asyncio.sleep(inter_frame_delay)
 
     def parcel_command(
         self,
@@ -294,9 +300,20 @@ class _GattTransport:
         if not probe.startswith(TRANSPORT_PROBE) or len(probe) < 4:
             raise PairingError(f"invalid transport probe: {probe.hex()}")
         await self.write(AVDTP, TRANSPORT_PROBE_REPLY + probe[4:])
-        # The bytes after the four-byte probe prefix fill one negotiated
-        # transport payload. Use that capacity for subsequent parcels.
-        self.parcel_chunk_size = len(probe) - 4
+        # Mi Home's channel layer derives the data MTU by adding the two-byte
+        # sequence field to the probe payload.  For the S400 this is 240 + 2
+        # = 242 data bytes, producing a full 244-byte GATT write.  Every
+        # non-final frame must contain the complete negotiated data MTU.
+        device_data_mtu = offer[5]
+        negotiated_data_mtu = len(probe) - 2
+        if negotiated_data_mtu != device_data_mtu or any(
+            byte != device_data_mtu for byte in probe[4:]
+        ):
+            raise PairingError(
+                "transport probe does not confirm the offered data MTU: "
+                f"offered {device_data_mtu}, probed {negotiated_data_mtu}"
+            )
+        self.parcel_chunk_size = negotiated_data_mtu
         self.trace.record(
             "official_init_complete", parcel_chunk_size=self.parcel_chunk_size
         )

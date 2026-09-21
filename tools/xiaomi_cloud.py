@@ -363,9 +363,14 @@ class XiaomiCloudClient:
             )
             first = _json_response(page.locator("body").inner_text().encode())
             sign = first.get("_sign")
-            if not isinstance(sign, str) or not sign:
+            active_session = (
+                first.get("securityStatus") == 0
+                and bool(first.get("location"))
+                and bool(first.get("psecurity"))
+            )
+            if not (isinstance(sign, str) and sign) and not active_session:
                 raise XiaomiAuthenticationError(
-                    "Browser session did not issue a login signature"
+                    "Browser session cannot refresh xiaomiio credentials"
                 )
 
             fields = {
@@ -374,9 +379,10 @@ class XiaomiCloudClient:
                 "callback": str(first.get("callback") or LOGIN_CALLBACK),
                 "qs": str(first.get("qs") or "%3Fsid%3Dxiaomiio%26_json%3Dtrue"),
                 "user": self.username,
-                "_sign": sign,
                 "_json": "true",
             }
+            if isinstance(sign, str) and sign:
+                fields["_sign"] = sign
             with page.expect_navigation(
                 wait_until="domcontentloaded",
                 timeout=round(self.timeout * 1000),

@@ -66,6 +66,8 @@ def summarize(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
                 raise ValueError("expected one connection session per file")
         if event in ("registration_confirmed", "login_verified"):
             result[event] = True
+        elif event == "registration_result":
+            result["registration_confirmed"] = row.get("value") == "11000000"
         if event not in ("write", "notify"):
             continue
         uuid = str(row.get("uuid", "")).lower()

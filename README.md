@@ -11,13 +11,12 @@ laboratoryjne może jednorazowo poprosić backend Xiaomi o podpis wymagany przez
 factory-new S400 z auth version 2.
 
 > [!WARNING]
-> Projekt jest w fazie alpha. Pasywne dekodowanie MiBeacon ma testy, ale pełny
-> provisioning nie został jeszcze potwierdzony na badanej S400 z firmware
-> `2.1.1_0006`, która zgłasza auth version 2. Analiza publicznego SDK wykazała
-> wymaganie podpisu i certyfikatu serwera. Czysto lokalny provisioner wykrywa tę
-> wersję i zgłasza brak obsługi. Dodano osobny, oczekujący na test sprzętowy
-> provisioner z jednorazowym podpisaniem po stronie Xiaomi. Szczegółowe dowody,
-> granice zgodności z S400 i analiza bez Bluetooth: [AUTH_V2.md](research/AUTH_V2.md).
+> Projekt jest w fazie alpha. Provisioning auth v2 został potwierdzony na S400
+> z firmware `2.1.1_0006`: waga zwróciła `REGISTER_OK`, a następnie zaakceptowała
+> lokalny login tokenem. Pierwszy bind wymaga jednorazowego podpisania credentialu
+> przez Xiaomi; po nim odbiór danych i loginy GATT są lokalne. Czysto lokalny
+> provisioner nadal obsługuje tylko starszy auth version 1. Szczegółowe dowody,
+> granice zgodności i analiza bez Bluetooth: [AUTH_V2.md](research/AUTH_V2.md).
 > [Analiza oficjalnego APK Mi Home](research/MIHOME_V2.md) niezależnie
 > potwierdza tę kolejność i identyfikuje brakujące poświadczenie rejestracji.
 
@@ -26,7 +25,8 @@ factory-new S400 z auth version 2.
 - eksperymentalny provisioning standard-auth version 1 bez OOB przez P-256 ECDH,
   HKDF-SHA256 i AES-CCM;
 - narzędzie auth v2 wykonujące ECDH lokalnie, proszące Xiaomi tylko o podpisany
-  credential, sprawdzające oba podpisy lokalnie i weryfikujące token loginem;
+  credential, sprawdzające oba podpisy lokalnie i zweryfikowane na S400 przez
+  `REGISTER_OK` oraz późniejszy login tokenem;
 - analiza captures bez Bluetooth i testowany offline format credentialu v2;
 - zapis 16-bajtowego bindkey i 12-bajtowego tokenu dopiero po odpowiedzi
   rejestracyjnej urządzenia i poprawnym loginie;
@@ -139,14 +139,13 @@ pliku `s400-secrets.json`.
 
 ## Jednorazowy provisioning auth v2 przez Xiaomi
 
-To jest praktyczna ścieżka dla factory-new S400, gdy lokalny test certyfikatu
-kończy się `REGISTER_ERROR`. Token i bindkey nadal powstają lokalnie z ECDH.
+To jest potwierdzona ścieżka dla factory-new S400 z auth v2. Token i bindkey
+nadal powstają lokalnie z ECDH.
 Do Xiaomi trafiają MAC, model, token i bindkey, tak jak w Mi Home; serwer zwraca
-DID, certyfikat oraz podpis `DID || bindkey || UTC`. Skrypt sprawdza ten podpis
-kluczem z otrzymanego certyfikatu. Produkcyjny certyfikat
-nie pasuje do publicznego root key z SDK, dlatego ostateczną walidację root wykonuje
-S400; jej wynikiem jest `REGISTER_OK` albo `REGISTER_ERROR`. Po rejestracji skrypt
-sprawdza token lokalnym loginem GATT.
+DID, certyfikat oraz podpis `DID || bindkey || UTC`. Tekstowy DID jest dopełniany
+zerami z lewej strony do 20 bajtów, dokładnie jak w Mi Home. Skrypt sprawdza
+podpis credentialu i certyfikat względem publicznego root key z SDK, wymaga
+`REGISTER_OK`, a następnie sprawdza token lokalnym loginem GATT.
 
 Na Windows z ASUS USB-BT400 uruchom narzędzie w zwykłym PowerShellu. Launcher
 otwiera dedykowany profil Edge na aktualnej stronie konta Xiaomi. Zakończ w nim
@@ -171,6 +170,10 @@ automatycznie odrzuconej captchy.
 Po sukcesie Xiaomi nie jest potrzebne do działania integracji. W Home Assistant
 wprowadź 32 znaki `bindkey` i 24 znaki `token` z pliku wynikowego. Narzędzie nie
 pobiera istniejących kluczy z konta i nie wylicza pomiarów w chmurze.
+
+Test sprzętowy z 2026-09-21 potwierdził negocjację DMTU 242, transfer
+wieloramkowego certyfikatu, lokalną weryfikację obu podpisów, odpowiedź
+`11000000` (`REGISTER_OK`) i późniejszą odpowiedź `21000000` (`LOGIN_OK`).
 
 Szczegóły protokołu, stan dowodów i workflow capture znajdują się w
 [`research/PROTOCOL.md`](research/PROTOCOL.md) oraz

@@ -21,7 +21,6 @@ from pathlib import Path
 from types import ModuleType
 
 from cryptography import x509
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from xiaomi_cloud import (
     REGIONS,
@@ -47,43 +46,69 @@ def load_core():
 
 
 def _did_bytes(did: str) -> bytes:
-    """Match Mi Home's fixed twenty-byte copy of the server DID."""
+    """Match Mi Home's left-padded twenty-byte copy of the server DID."""
     raw = did.encode("utf-8")
     if not raw or len(raw) > 20:
         raise ValueError("Xiaomi BLE DID must contain between 1 and 20 bytes")
-    return raw.ljust(20, b"\x00")
+    return raw.rjust(20, b"\x00")
 
 
 def _did_text(raw: bytes | None) -> str | None:
     if raw is None:
         return None
-    return raw.rstrip(b"\x00").decode("utf-8")
+    return raw.lstrip(b"\x00").decode("utf-8")
 
 
-async def _send_parcel(transport, protocol, parcel_type, value, context):
+async def _send_parcel(
+    transport,
+    protocol,
+    parcel_type,
+    value,
+    context,
+    *,
+    chunk_size,
+    inter_frame_delay,
+):
     chunks = [
-        value[offset : offset + transport.parcel_chunk_size]
-        for offset in range(0, len(value), transport.parcel_chunk_size)
+        value[offset : offset + chunk_size]
+        for offset in range(0, len(value), chunk_size)
     ]
-    await transport.write(protocol.AVDTP, transport.parcel_command(parcel_type, value))
+    await transport.write(
+        protocol.AVDTP,
+        transport.parcel_command(parcel_type, value, chunk_size=chunk_size),
+    )
     await transport.expect(protocol.AVDTP, protocol.RCV_RDY, f"{context} readiness")
-    await transport.send_parcel(value)
+    await transport.send_parcel(
+        value,
+        chunk_size=chunk_size,
+        inter_frame_delay=inter_frame_delay,
+    )
     for _ in range(8):
         acknowledgement = await transport.receive(protocol.AVDTP)
         if acknowledgement == protocol.RCV_OK:
             return
         if (
             acknowledgement.startswith(protocol.RCV_LOST_PREFIX)
-            and len(acknowledgement) == 6
+            and len(acknowledgement) >= 6
+            and (len(acknowledgement) - 4) % 2 == 0
         ):
-            missing = int.from_bytes(acknowledgement[4:6], "little")
-            if not 1 <= missing <= len(chunks):
-                raise RuntimeError(f"{context}: invalid missing frame {missing}")
-            transport.trace.record("retransmit", context=context, frame_number=missing)
-            await transport.write(
-                protocol.AVDTP,
-                missing.to_bytes(2, "little") + chunks[missing - 1],
-            )
+            missing_frames = [
+                int.from_bytes(acknowledgement[offset : offset + 2], "little")
+                for offset in range(4, len(acknowledgement), 2)
+            ]
+            if any(not 1 <= missing <= len(chunks) for missing in missing_frames):
+                raise RuntimeError(
+                    f"{context}: invalid missing frames {missing_frames}"
+                )
+            for missing in missing_frames:
+                transport.trace.record(
+                    "retransmit", context=context, frame_number=missing
+                )
+                await transport.write(
+                    protocol.AVDTP,
+                    missing.to_bytes(2, "little") + chunks[missing - 1],
+                )
+                await asyncio.sleep(inter_frame_delay)
             continue
         raise RuntimeError(
             f"{context}: unexpected acknowledgement {acknowledgement.hex()}"
@@ -186,7 +211,23 @@ async def run(args: argparse.Namespace, password: str) -> int:
 
             private_key, public_xy = crypto.generate_keypair()
             await transport.write(protocol.UPNP, protocol.CMD_SET_KEY)
-            await _send_parcel(transport, protocol, 0x03, public_xy, "public key")
+            chunk_size = transport.parcel_chunk_size
+            if args.parcel_chunk_size is not None:
+                chunk_size = min(args.parcel_chunk_size, chunk_size)
+            trace.record(
+                "parcel_transport_selected",
+                chunk_size=chunk_size,
+                inter_frame_delay=args.inter_frame_delay,
+            )
+            await _send_parcel(
+                transport,
+                protocol,
+                0x03,
+                public_xy,
+                "public key",
+                chunk_size=chunk_size,
+                inter_frame_delay=args.inter_frame_delay,
+            )
             device_public_xy = await transport.receive_parcel(expected_type=0x03)
             setup = crypto.derive_setup_secrets(private_key, device_public_xy)
             trace.record("local_setup_secrets_derived")
@@ -213,27 +254,18 @@ async def run(args: argparse.Namespace, password: str) -> int:
                 utc=bind.utc.to_bytes(4, "little"),
                 certificate_der=bind.certificate_der,
             )
-            credential.verify_registration_signature(setup.bindkey)
             certificate = x509.load_der_x509_certificate(bind.certificate_der)
             certificate_fingerprint = certificate.fingerprint(hashes.SHA256()).hex()
-            try:
-                credential.verify_certificate_signature()
-            except InvalidSignature:
-                trace.record(
-                    "sdk_root_mismatch",
-                    certificate_sha256=certificate_fingerprint,
-                )
-                if args.require_sdk_root:
-                    raise
-                print(
-                    "Production certificate does not match the public SDK root; "
-                    "the S400 will perform the authoritative root check."
-                )
-            else:
-                trace.record(
-                    "sdk_root_verified",
-                    certificate_sha256=certificate_fingerprint,
-                )
+            credential.verify_registration_signature(setup.bindkey)
+            trace.record(
+                "registration_signature_verified",
+                certificate_sha256=certificate_fingerprint,
+            )
+            credential.verify_certificate_signature()
+            trace.record(
+                "sdk_root_verified",
+                certificate_sha256=certificate_fingerprint,
+            )
             encrypted = credential.encrypt(setup.did_key)
             trace.record(
                 "xiaomi_credential_verified",
@@ -243,7 +275,13 @@ async def run(args: argparse.Namespace, password: str) -> int:
 
             await transport.write(protocol.UPNP, protocol.CMD_AUTH)
             await _send_parcel(
-                transport, protocol, 0x00, encrypted, "registration credential"
+                transport,
+                protocol,
+                0x00,
+                encrypted,
+                "registration credential",
+                chunk_size=chunk_size,
+                inter_frame_delay=args.inter_frame_delay,
             )
             await _send_parcel(
                 transport,
@@ -251,6 +289,8 @@ async def run(args: argparse.Namespace, password: str) -> int:
                 0x07,
                 bind.certificate_der,
                 "server certificate",
+                chunk_size=chunk_size,
+                inter_frame_delay=args.inter_frame_delay,
             )
             result = await transport.receive(protocol.UPNP)
             trace.record("registration_result", value=result.hex())
@@ -310,13 +350,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--protocol-timeout", type=float, default=12.0)
     parser.add_argument("--cloud-timeout", type=float, default=20.0)
     parser.add_argument(
-        "--browser-cdp",
-        help="use an already authenticated Chromium/Edge CDP session",
+        "--parcel-chunk-size",
+        type=int,
+        help="override the negotiated parcel data MTU (diagnostics only)",
     )
     parser.add_argument(
-        "--require-sdk-root",
-        action="store_true",
-        help="abort unless the certificate matches the root from the public SDK",
+        "--inter-frame-delay",
+        type=float,
+        default=0.12,
+        help="seconds between parcel frames (default: 0.12)",
+    )
+    parser.add_argument(
+        "--browser-cdp",
+        help="use an already authenticated Chromium/Edge CDP session",
     )
     return parser.parse_args()
 

@@ -6,9 +6,13 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.2.1 - 2026-09-21
+
 - Add a one-time Xiaomi-assisted standard-auth v2 provisioner that derives
   keys locally, verifies the returned signatures and saves secrets only after
   a successful device login.
+- Confirm auth v2 provisioning on S400 firmware `2.1.1_0006`, including the
+  242-byte data MTU, left-padded DID, `REGISTER_OK`, and token login.
 - Document the Mi Home API envelope and the origin of the `smac` bind property.
 
 ## 0.1.0 - Unreleased

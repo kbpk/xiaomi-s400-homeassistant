@@ -1,19 +1,18 @@
 # Standard-auth v2: analiza bez Bluetooth
 
-Stan: 2026-09-16. **Znaleziono kod procedury zgłaszającej wersję 2** i
-zweryfikowano jej kompletny transport na badanej S400. Waga przyjęła `0x13`,
-92-bajtowy credential oraz certyfikat laboratoryjny, po czym zwróciła
-`REGISTER_ERROR`. Nie mamy obrazu firmware S400 ani credentialu podpisanego
-przez zaufany klucz, więc nie ukończono pierwszego bindu.
+Stan: 2026-09-21. **Znaleziono kod procedury zgłaszającej wersję 2** i
+zweryfikowano ją od ECDH do lokalnego loginu na badanej S400. Waga przyjęła
+`0x13`, 92-bajtowy produkcyjny credential i certyfikat Xiaomi, zwróciła
+`REGISTER_OK`, a następnie zaakceptowała login lokalnie wyprowadzonym tokenem.
 
 Aktualizacja: analiza [oficjalnego APK Mi Home 11.7.705](MIHOME_V2.md)
 niezależnie potwierdza kolejność, format i pola `cloud_cert`/`cloud_sign`/`utc`.
 Zidentyfikowano też endpoint `/v2/device/ble_standard_bind`.
 
-Dodano `tools/s400_xiaomi_pair.py`, który implementuje brakujący wariant z
-jednorazowym uzyskaniem produkcyjnego podpisu. Kod weryfikuje credential lokalnie
-przed wysłaniem, lecz jego zgodność z produkcyjnym kontem i wagą oczekuje na
-pierwszy test sprzętowy.
+`tools/s400_xiaomi_pair.py` implementuje ten wariant z jednorazowym uzyskaniem
+produkcyjnego podpisu. Kod weryfikuje credential lokalnie przed wysłaniem,
+wymaga potwierdzenia rejestracji przez S400 i zapisuje sekrety dopiero po
+udanym lokalnym loginie.
 
 ## Źródło i odtwarzalność
 
@@ -178,6 +177,11 @@ Zaszyfrowany typ 0:
 | 84 | 4 | UTC, cztery bajty przekazywane też do podpisywanego komunikatu |
 | po ciphertext | 4 | MIC AES-CCM |
 
+Tekstowy DID zwrócony przez `bltapplydid` ma w zaobserwowanym przypadku 19
+bajtów. Mi Home wywołuje `xf6.OooOo0O(20, did)`, które dopełnia krótszy bufor
+zerami **z lewej strony**. Dopełnienie z prawej zmieniało podpisywany komunikat;
+lokalna weryfikacja podpisu nie przechodziła, a S400 zwracała `REGISTER_ERROR`.
+
 Klucz AES to did_key[16], nonce `101112131415161718191a1b`, AAD ASCII `devID`.
 Plaintext ma 88 bajtów; cała paczka 92. Little-endian UTC potwierdza także
 `ByteBuffer.order(ByteOrder.LITTLE_ENDIAN)` w [kliencie Mi Home](MIHOME_V2.md).
@@ -199,10 +203,10 @@ d7f020ea39a2ee867fdd783fdc2fb086095cc2850413a2802c627dbdc715f4f9
 
 SDK parsuje certyfikat, haszuje jego TBS i sprawdza podpis tym kluczem.
 Dopiero po sukcesie używa klucza z certyfikatu do sprawdzenia podpisu
-rejestracji. Nie znamy jeszcze produkcyjnego certyfikatu ani tego, czy dokładnie
-ten sam root znajduje się w S400. Własny self-signed certyfikat nie przechodzi
-tej ścieżki. Nazwa `REG_START_WO_PKI` dla `0x15` nie oznacza w tym wydaniu braku
-sprawdzania podpisu serwera — analizowana procedura zaczyna się właśnie od `0x15`.
+rejestracji. Certyfikat zwrócony w udanej próbie przeszedł tę lokalną kontrolę,
+a S400 zaakceptowała cały credential. Własny self-signed certyfikat nie
+przechodzi tej ścieżki. Nazwa `REG_START_WO_PKI` dla `0x15` nie oznacza w tym
+wydaniu braku sprawdzania podpisu serwera — procedura zaczyna się od `0x15`.
 
 ## A, B, C po tej analizie
 
@@ -241,8 +245,8 @@ MAC, DID, kluczy ani surowych ramek. Jeden plik powinien zawierać jedną sesję
 Moduł `auth_v2.py` niezależnie implementuje format credentialu, obie weryfikacje
 podpisów i szyfrowanie 92-bajtowej paczki. Testy używają sztucznego CA i serwera:
 zmiana DID, bindkey, UTC lub podpisu jest odrzucana; własny certyfikat nie
-przechodzi pod publicznym rootem SDK. **To test modelu kryptograficznego,
-nie emulacja firmware i nie zakończony provisioning S400.**
+przechodzi pod publicznym rootem SDK. Ten model został następnie potwierdzony
+produkcyjnym credentialem i wynikiem `REGISTER_OK` na S400.
 
 Provisioner odczytuje teraz wersję i dla `2` kończy z konkretnym komunikatem
 przed wysłaniem klucza aplikacji. Oddzielne narzędzie badawcze może wykonać
@@ -260,9 +264,8 @@ działających. Obsługa istniejących bindkey i tokenu pozostaje dostępna.
    nie znaleziono w tej gałęzi alternatywnego lokalnego wystawiania credentialu.
 3. Wykonano na sprzęcie: `0x13`, typ 0 długości 92 i typ 7 z własnym
    certyfikatem zostały odebrane, po czym S400 zwróciła `0x12`.
-4. Szukać wyłącznie odtwarzalnego sposobu uzyskania akceptowanego credentialu
-   albo alternatywnego, potwierdzonego wejścia w stan registered. Zgadywanie
-   komend na charakterystyce `0x8001` nie stanowi dowodu protokołu.
+4. Wykonano na sprzęcie: produkcyjny credential przeszedł obie lokalne
+   weryfikacje, S400 zwróciła `0x11`, a token przeszedł późniejszy login GATT.
 
 Nie da się odtworzyć dawnych sekretów ECDH z samych dwóch punktów publicznych
 w zapisanych captures. Traces celowo nie zachowują prywatnych kluczy. Aby

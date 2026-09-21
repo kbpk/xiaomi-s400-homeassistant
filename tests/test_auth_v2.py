@@ -102,6 +102,41 @@ def test_wrong_parcel_type_is_not_acknowledged() -> None:
     asyncio.run(scenario())
 
 
+def test_transport_negotiates_242_byte_data_mtu() -> None:
+    writes = []
+
+    class Client:
+        async def write_gatt_char(self, uuid, data, **_kwargs):
+            writes.append((uuid, bytes(data)))
+
+    async def scenario():
+        transport = pairing._GattTransport(Client(), pairing.TraceRecorder(), 0.1)
+        device_info_replies = iter((b"a", b"b", b"c", b"d"))
+        avdtp_replies = iter(
+            (
+                bytes.fromhex("0000040006f2"),
+                bytes.fromhex("00000401") + bytes([0xF2]) * 240,
+            )
+        )
+
+        async def receive(uuid, timeout=None):
+            del timeout
+            if uuid == protocol.VEND1C:
+                return next(device_info_replies)
+            return next(avdtp_replies)
+
+        transport.receive = receive
+        await transport.official_init()
+        return transport
+
+    transport = asyncio.run(scenario())
+    assert transport.parcel_chunk_size == 242
+    assert writes[-2:] == [
+        (protocol.AVDTP, bytes.fromhex("0000050006f2")),
+        (protocol.AVDTP, bytes.fromhex("00000501") + bytes([0xF2]) * 240),
+    ]
+
+
 def make_credential():
     # Synthetic lab root and server; no Xiaomi private keys or real credentials.
     root = ec.generate_private_key(ec.SECP256R1())
@@ -207,3 +242,12 @@ def test_incomplete_trace_does_not_establish_public_key_exchange() -> None:
     assert report["incomplete_incoming_parcel"]
     assert report["device_public_key_bytes"] is None
     assert report["finding"] == "no_v2_ordering_conflict_demonstrated"
+
+
+def test_trace_reports_successful_registration_result() -> None:
+    rows = list(trace_rows(inline=True, auth_first=True))
+    rows.append({"event": "registration_result", "value": "11000000"})
+    rows.append({"event": "login_verified"})
+    report = analyzer.summarize(rows)
+    assert report["registration_confirmed"]
+    assert report["login_verified"]

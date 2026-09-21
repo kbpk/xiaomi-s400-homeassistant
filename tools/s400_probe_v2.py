@@ -43,8 +43,8 @@ def make_lab_credential(auth_v2, did: bytes, bindkey: bytes):
     """Create a valid root -> server -> registration chain for a negative test."""
     root_key = ec.generate_private_key(ec.SECP256R1())
     server_key = ec.generate_private_key(ec.SECP256R1())
-    # Empty distinguished names and a one-byte serial keep the DER below the
-    # negotiated 240-byte payload. S400 rejects oversized non-final fragments.
+    # Empty distinguished names and a one-byte serial keep this negative-test
+    # credential compact; the transport itself supports multi-frame parcels.
     root_name = x509.Name([])
     server_name = x509.Name([])
     now = datetime.now(UTC)

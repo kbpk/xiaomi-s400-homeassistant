@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
-from s400_xiaomi_pair import _did_bytes  # noqa: E402
+from s400_xiaomi_pair import _did_bytes, _did_text  # noqa: E402
 from xiaomi_cloud import (  # noqa: E402
     XiaomiAuthenticationError,
     XiaomiCloudClient,
@@ -97,7 +97,8 @@ def test_api_envelope_keeps_required_unencrypted_fields() -> None:
 
 
 def test_did_is_zero_padded_to_firmware_width() -> None:
-    assert _did_bytes("blt.3.example") == b"blt.3.example" + bytes(7)
+    assert _did_bytes("blt.3.example") == bytes(7) + b"blt.3.example"
+    assert _did_text(bytes(7) + b"blt.3.example") == "blt.3.example"
     assert len(_did_bytes("12345678901234567890")) == 20
     with pytest.raises(ValueError):
         _did_bytes("x" * 21)
