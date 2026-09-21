@@ -73,6 +73,38 @@ async def test_diagnostics_redacts_secrets(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
 
 
+async def test_sensor_restore_paths(hass: HomeAssistant) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from custom_components.xiaomi_s400_local.coordinator import S400Coordinator
+    from custom_components.xiaomi_s400_local.entity import S400Entity
+    from custom_components.xiaomi_s400_local.sensor import SENSORS, S400Sensor
+
+    entry = _entry()
+    entry.add_to_hass(hass)
+    coordinator = S400Coordinator(hass, ADDRESS, bytes(16), None, entry.entry_id)
+    entity = S400Sensor(entry, coordinator, SENSORS[0])
+    entity.hass = hass
+
+    with (
+        patch.object(S400Entity, "async_added_to_hass", new=AsyncMock()),
+        patch.object(
+            entity,
+            "async_get_last_sensor_data",
+            new=AsyncMock(return_value=SimpleNamespace(native_value=123.4)),
+        ),
+        patch.object(entity, "async_write_ha_state"),
+    ):
+        coordinator.values["weight"] = 50.0
+        await entity.async_added_to_hass()
+        assert coordinator.values["weight"] == 50.0
+
+        coordinator.values["weight"] = None
+        await entity.async_added_to_hass()
+        assert coordinator.values["weight"] == 123.4
+
+
 async def test_remove_stale_device_returns_true(hass: HomeAssistant) -> None:
     entry = _entry()
     entry.add_to_hass(hass)

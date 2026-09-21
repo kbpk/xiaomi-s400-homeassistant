@@ -258,6 +258,59 @@ async def test_reconfigure_updates_credentials(hass: HomeAssistant) -> None:
     assert entry.data["token"] == "dd" * 12
 
 
+async def test_discovered_choices_and_product_id(hass: HomeAssistant) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from custom_components.xiaomi_s400_local import pairing
+    from custom_components.xiaomi_s400_local.const import MIBEACON_UUID
+
+    info = SimpleNamespace(
+        address=ADDRESS,
+        name="Xiaomi Scale S400",
+        service_data={MIBEACON_UUID: bytes.fromhex("0000d930")},
+    )
+    with patch(
+        "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
+        return_value=[info],
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}
+        )
+        assert result["type"] == FlowResultType.FORM
+
+    result_pair = pairing.PairingResult(
+        mac=ADDRESS,
+        product_id="0x30D9",
+        did="blt.3.1abc",
+        did_hex="00" * 20,
+        bindkey="aa" * 16,
+        token="bb" * 12,
+    )
+    with (
+        patch(
+            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
+            return_value=[info],
+        ),
+        patch(
+            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_ble_device_from_address",
+            return_value=object(),
+        ),
+        patch(
+            "custom_components.xiaomi_s400_local.config_flow.pair_device",
+            new=AsyncMock(return_value=result_pair),
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"address": ADDRESS, "setup_method": SETUP_LOCAL}
+        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
 async def test_reconfigure_invalid_key(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,

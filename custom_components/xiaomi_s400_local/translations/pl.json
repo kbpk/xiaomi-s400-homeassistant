@@ -71,5 +71,19 @@
     "binary_sensor": {
       "stabilized": {"name": "Pomiar ustabilizowany"}
     }
+  },
+  "issues": {
+    "invalid_bindkey": {
+      "title": "Nieprawidłowe poświadczenia Xiaomi S400",
+      "description": "Reklamy z {address} nie dają się już odszyfrować. Wyodrębnij bindkey ponownie i zaktualizuj integrację."
+    }
+  },
+  "fix_flow": {
+    "step": {
+      "confirm": {
+        "title": "Zaktualizuj poświadczenia Xiaomi S400",
+        "description": "Zatwierdź, a następnie użyj opcji Reconfigure w integracji, aby wpisać nowy bindkey i token."
+      }
+    }
   }
 }

@@ -116,8 +116,10 @@ def test_parser_ignores_unknown_objects() -> None:
 def test_parser_unencrypted_payload() -> None:
     # frame control without the encryption bit: payload used verbatim
     fc = 0x5040  # version 5, object present, not encrypted, no mac
-    data = fc.to_bytes(2, "little") + bytes.fromhex("d9302a") + obj(
-        0x6E16, measurement(mass=1001, hr=31, imp=4620)
+    data = (
+        fc.to_bytes(2, "little")
+        + bytes.fromhex("d9302a")
+        + obj(0x6E16, measurement(mass=1001, hr=31, imp=4620))
     )
     result = parser.parse_mibeacon("04:AE:47:5C:FC:29", data, KEY)
     assert result.weight == 100.1

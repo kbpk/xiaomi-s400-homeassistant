@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from custom_components.xiaomi_s400_local import pairing
 from custom_components.xiaomi_s400_local.crypto import generate_keypair
 from custom_components.xiaomi_s400_local.protocol import (
+    AVDTP,
     CMD_TRANSPORT_INIT,
     DEVICE_INFO_QUERIES,
     RCV_ACK,
@@ -18,7 +20,6 @@ from custom_components.xiaomi_s400_local.protocol import (
     TRANSPORT_OFFER,
     TRANSPORT_PROBE,
     UPNP,
-    AVDTP,
     VEND1C,
 )
 
@@ -57,10 +58,9 @@ async def test_trace_recorder_writes_and_handles_errors(tmp_path: Path) -> None:
 
     recorder = pairing.TraceRecorder(None)
     recorder.record("ignored")
-    with pytest.raises(ValueError):
-        with pairing.TraceRecorder(path) as rec:
-            rec.record("before")
-            raise ValueError("boom")
+    with pytest.raises(ValueError), pairing.TraceRecorder(path) as rec:
+        rec.record("before")
+        raise ValueError("boom")
     assert "pairing_error" in path.read_text()
 
 
@@ -100,7 +100,9 @@ async def test_transport_expect_parcel_command_and_send() -> None:
 
 async def test_transport_receive_multi_frame_parcel() -> None:
     transport, client = _transport()
-    _put(transport, AVDTP, bytes.fromhex("000000") + b"\x03" + (2).to_bytes(2, "little"))
+    _put(
+        transport, AVDTP, bytes.fromhex("000000") + b"\x03" + (2).to_bytes(2, "little")
+    )
     _put(transport, AVDTP, (1).to_bytes(2, "little") + b"abc")
     _put(transport, AVDTP, (2).to_bytes(2, "little") + b"de")
     result = await transport.receive_parcel(expected_type=0x03)
@@ -258,9 +260,11 @@ async def test_login_rejects_wrong_token() -> None:
     _put(transport, AVDTP, bytes.fromhex("000002") + b"\x0d" + b"\x22" * 16)
     _put(transport, AVDTP, bytes.fromhex("000002") + b"\x0c" + b"\x00" * 32)
 
-    with _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16):
-        with pytest.raises(pairing.PairingError):
-            await pairing._login(transport, token)
+    with (
+        _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16),
+        pytest.raises(pairing.PairingError),
+    ):
+        await pairing._login(transport, token)
 
 
 async def test_find_s400_scans_and_matches() -> None:
@@ -285,16 +289,19 @@ async def test_find_s400_scans_and_matches() -> None:
 async def test_find_s400_raises_when_missing() -> None:
     from unittest.mock import patch as _patch
 
-    with _patch(
-        "custom_components.xiaomi_s400_local.pairing.BleakScanner.find_device_by_filter",
-        return_value=None,
+    with (
+        _patch(
+            "custom_components.xiaomi_s400_local.pairing.BleakScanner.find_device_by_filter",
+            return_value=None,
+        ),
+        pytest.raises(pairing.PairingError),
     ):
-        with pytest.raises(pairing.PairingError):
-            await pairing.find_s400()
+        await pairing.find_s400()
 
 
 async def test_pair_device_v1_success() -> None:
-    from unittest.mock import AsyncMock, patch as _patch
+    from unittest.mock import AsyncMock
+    from unittest.mock import patch as _patch
 
     _, device_pub = generate_keypair()
     fake_transport = FakeTransport(device_pub)
@@ -322,7 +329,8 @@ async def test_pair_device_v1_success() -> None:
 
 
 async def test_pair_device_v2_is_unsupported() -> None:
-    from unittest.mock import AsyncMock, patch as _patch
+    from unittest.mock import AsyncMock
+    from unittest.mock import patch as _patch
 
     _, device_pub = generate_keypair()
     fake_transport = FakeTransport(device_pub, version=bytes.fromhex("02000000"))
@@ -338,13 +346,13 @@ async def test_pair_device_v2_is_unsupported() -> None:
             "custom_components.xiaomi_s400_local.pairing._login",
             new=AsyncMock(return_value=object()),
         ),
+        pytest.raises(pairing.RegistrationUnsupported),
     ):
-        with pytest.raises(pairing.RegistrationUnsupported):
-            await pairing.pair_device(
-                ble_device=type("Dev", (), {"address": "04:AE:47:5C:FC:29"})(),
-                product_id=0x30D9,
-                official_init=True,
-            )
+        await pairing.pair_device(
+            ble_device=type("Dev", (), {"address": "04:AE:47:5C:FC:29"})(),
+            product_id=0x30D9,
+            official_init=True,
+        )
 
 
 async def test_transport_receive_parcel_error_branches() -> None:
@@ -391,9 +399,11 @@ async def test_login_failure_results() -> None:
     _put(transport, AVDTP, RCV_RDY)
     _put(transport, AVDTP, RCV_OK)
     _put(transport, AVDTP, bytes.fromhex("000002") + b"\x0d" + b"\x22" * 8)
-    with _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16):
-        with pytest.raises(pairing.PairingError):
-            await pairing._login(transport, token)
+    with (
+        _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16),
+        pytest.raises(pairing.PairingError),
+    ):
+        await pairing._login(transport, token)
 
     # explicit LOGIN_ERROR result
     keys = derive_login_keys(token, b"\x11" * 16, b"\x22" * 16)
@@ -406,13 +416,16 @@ async def test_login_failure_results() -> None:
     _put(transport, AVDTP, RCV_RDY)
     _put(transport, AVDTP, RCV_OK)
     _put(transport, UPNP, LOGIN_ERROR)
-    with _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16):
-        with pytest.raises(pairing.PairingError):
-            await pairing._login(transport, token)
+    with (
+        _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16),
+        pytest.raises(pairing.PairingError),
+    ):
+        await pairing._login(transport, token)
 
 
 async def test_pair_device_by_address_and_without_official_init() -> None:
-    from unittest.mock import AsyncMock, patch as _patch
+    from unittest.mock import AsyncMock
+    from unittest.mock import patch as _patch
 
     _, device_pub = generate_keypair()
     fake_transport = FakeTransport(device_pub)
@@ -453,12 +466,12 @@ async def test_pair_device_rejects_bad_did() -> None:
             "custom_components.xiaomi_s400_local.pairing._GattTransport",
             lambda *a, **k: fake_transport,
         ),
+        pytest.raises(pairing.PairingError),
     ):
-        with pytest.raises(pairing.PairingError):
-            await pairing.pair_device(
-                ble_device=type("Dev", (), {"address": "04:AE:47:5C:FC:29"})(),
-                did=bytes(10),
-            )
+        await pairing.pair_device(
+            ble_device=type("Dev", (), {"address": "04:AE:47:5C:FC:29"})(),
+            did=bytes(10),
+        )
 
 
 async def test_find_s400_matcher_branches() -> None:
@@ -499,6 +512,17 @@ async def test_find_s400_matcher_branches() -> None:
         )()
         assert matcher(device, adv) is True
 
+        adv_pid = type(
+            "Adv",
+            (),
+            {
+                "service_data": {MIBEACON_UUID: bytes.fromhex("0000d930")},
+                "local_name": None,
+                "name": None,
+            },
+        )()
+        assert matcher(device, adv_pid) is True
+
 
 async def test_login_unexpected_result() -> None:
     from unittest.mock import patch as _patch
@@ -519,9 +543,53 @@ async def test_login_unexpected_result() -> None:
     _put(transport, AVDTP, RCV_RDY)
     _put(transport, AVDTP, RCV_OK)
     _put(transport, UPNP, b"\x99\x00\x00\x00")
-    with _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16):
+    with (
+        _patch.object(pairing.secrets, "token_bytes", return_value=b"\x11" * 16),
+        pytest.raises(pairing.PairingError),
+    ):
+        await pairing._login(transport, token)
+
+
+async def test_transport_write_failure_records_and_raises() -> None:
+    class FailingClient(FakeClient):
+        async def write_gatt_char(self, uuid, data, response=False):
+            raise RuntimeError("nope")
+
+    transport = pairing._GattTransport(
+        FailingClient(), pairing.TraceRecorder(None), 0.5
+    )
+    with pytest.raises(RuntimeError):
+        await transport.write(UPNP, b"\x01")
+
+
+async def test_official_init_invalid_probe_and_mtu_mismatch() -> None:
+    from unittest.mock import patch as _patch
+
+    transport, _ = _transport()
+    with _patch.object(pairing, "DEVICE_INFO_QUERIES", ()):
+        _put(transport, AVDTP, TRANSPORT_OFFER + bytes([0x00, 18]))
+        _put(transport, AVDTP, b"\x00\x00")
         with pytest.raises(pairing.PairingError):
-            await pairing._login(transport, token)
+            await transport.official_init()
+
+    transport, _ = _transport()
+    with _patch.object(pairing, "DEVICE_INFO_QUERIES", ()):
+        _put(transport, AVDTP, TRANSPORT_OFFER + bytes([0x00, 18]))
+        _put(transport, AVDTP, TRANSPORT_PROBE + bytes([19] * 16))
+        with pytest.raises(pairing.PairingError):
+            await transport.official_init()
+
+
+async def test_official_init_device_info_timeout() -> None:
+    from unittest.mock import patch as _patch
+
+    transport, _ = _transport()
+    mtu = 18
+    with _patch.object(pairing, "DEVICE_INFO_QUERIES", (bytes.fromhex("00"),)):
+        _put(transport, AVDTP, TRANSPORT_OFFER + bytes([0x00, mtu]))
+        _put(transport, AVDTP, TRANSPORT_PROBE + bytes([mtu] * (mtu - 2)))
+        await transport.official_init()
+    assert transport.parcel_chunk_size == mtu
 
 
 def test_pairing_result_is_frozen() -> None:
@@ -533,5 +601,5 @@ def test_pairing_result_is_frozen() -> None:
         bindkey="aa" * 16,
         token="bb" * 12,
     )
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         result.mac = "x"  # type: ignore[misc]

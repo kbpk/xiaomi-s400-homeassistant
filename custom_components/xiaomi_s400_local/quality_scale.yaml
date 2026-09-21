@@ -31,7 +31,8 @@ rules:
   runtime-data: done
   test-before-configure: done
   test-before-setup:
-    status: todo
+    status: exempt
+    comment: The scale is a passive Bluetooth device; there is no connection to test at setup time.
   unique-config-entry: done
 
   # Silver
@@ -76,8 +77,7 @@ rules:
     comment: The integration raises no runtime exceptions to the user; config flow failures are reported through error translations.
   icon-translations: done
   reconfiguration-flow: done
-  repair-issues:
-    status: todo
+  repair-issues: done
   stale-devices: done
 
   # Platinum
@@ -87,5 +87,4 @@ rules:
   inject-websession:
     status: exempt
     comment: The integration makes no HTTP requests.
-  strict-typing:
-    status: todo
+  strict-typing: done

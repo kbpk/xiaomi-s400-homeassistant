@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.core import HomeAssistant
 
 from . import S400ConfigEntry
@@ -11,7 +13,7 @@ from .coordinator import S400Coordinator
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: S400ConfigEntry
-) -> dict:
+) -> dict[str, Any]:
     """Return state while replacing long-lived secrets."""
     coordinator: S400Coordinator = entry.runtime_data
     config = dict(entry.data)

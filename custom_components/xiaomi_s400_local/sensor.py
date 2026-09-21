@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
-    SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
@@ -84,7 +85,7 @@ async def async_setup_entry(
     )
 
 
-class S400Sensor(S400Entity, SensorEntity):
+class S400Sensor(S400Entity, RestoreSensor):
     """One decoded measurement field."""
 
     entity_description: S400SensorDescription
@@ -99,5 +100,16 @@ class S400Sensor(S400Entity, SensorEntity):
         self.entity_description = description
 
     @property
-    def native_value(self):
-        return self.coordinator.values[self._key]
+    def native_value(self) -> float | int | None:
+        return cast(float | int | None, self.coordinator.values[self._key])
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last measurement so a restart does not blank the entities."""
+        await super().async_added_to_hass()
+        if self.coordinator.values.get(self._key) is not None:
+            return
+        last = await self.async_get_last_sensor_data()
+        if last is None or last.native_value is None:
+            return
+        self.coordinator.values[self._key] = last.native_value
+        self.async_write_ha_state()

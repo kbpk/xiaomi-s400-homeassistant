@@ -28,6 +28,7 @@ dev = [
   "serialx==1.10.0",
   "fnv-hash-fast==2.0.3",
   "psutil-home-assistant==0.0.1",
+  "mypy>=1.11,<2",
 ]
 
 [tool.uv]
@@ -45,3 +46,9 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "SIM", "UP"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unused_configs = true
+files = ["custom_components/xiaomi_s400_local"]

@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 from homeassistant.core import HomeAssistant
 
 from custom_components.xiaomi_s400_local import active
-from custom_components.xiaomi_s400_local.const import MIBEACON_UUID
+from custom_components.xiaomi_s400_local.const import DOMAIN, MIBEACON_UUID
 from custom_components.xiaomi_s400_local.coordinator import S400Coordinator
 from custom_components.xiaomi_s400_local.protocol import CMTP
 
@@ -20,7 +20,9 @@ _MAC = bytes.fromhex("04ae475cfc29")
 _EMBEDDED_MAC = _MAC[::-1]
 
 
-def _frame(*, mass: int, hr: int, imp: int, profile: int = 1, ts: int = 1700000000) -> bytes:
+def _frame(
+    *, mass: int, hr: int, imp: int, profile: int = 1, ts: int = 1700000000
+) -> bytes:
     prefix = (0x5858).to_bytes(2, "little") + bytes.fromhex("d9302a")
     packed = mass | (hr << 11) | (imp << 18)
     payload = (
@@ -96,7 +98,9 @@ async def test_advertisement_without_service_data_is_ignored(
 
 async def test_active_session_skipped_without_token(hass: HomeAssistant) -> None:
     coordinator = _coordinator(hass)
-    with patch.object(coordinator, "_active_session", new=AsyncMock()) as active_session:
+    with patch.object(
+        coordinator, "_active_session", new=AsyncMock()
+    ) as active_session:
         coordinator._start_active_session()
         active_session.assert_not_called()
 
@@ -183,7 +187,7 @@ async def test_active_session_applies_cmtp_measurement(hass: HomeAssistant) -> N
     from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
     from custom_components.xiaomi_s400_local.crypto import SessionKeys
-    from custom_components.xiaomi_s400_local.protocol import CMTP, RCV_OK, RCV_RDY
+    from custom_components.xiaomi_s400_local.protocol import RCV_OK, RCV_RDY
 
     keys = SessionKeys(
         device_key=bytes.fromhex("00112233445566778899aabbccddeeff"),
@@ -231,7 +235,9 @@ async def test_active_session_applies_cmtp_measurement(hass: HomeAssistant) -> N
 
 async def test_advertisement_with_token_triggers_active(hass: HomeAssistant) -> None:
     coordinator = _coordinator(hass, token=bytes(12))
-    with patch.object(coordinator, "_active_session", new=AsyncMock()) as active_session:
+    with patch.object(
+        coordinator, "_active_session", new=AsyncMock()
+    ) as active_session:
         coordinator._advertisement(_service_info(_frame(mass=500, hr=0, imp=0)), None)
         assert active_session.called
 
@@ -246,6 +252,23 @@ async def test_stop_cancels_running_task(hass: HomeAssistant) -> None:
 
     coordinator._active_task = hass.async_create_task(_never())
     await coordinator.stop()
+
+
+async def test_repeated_failures_raise_and_clear_repair_issue(
+    hass: HomeAssistant,
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    coordinator = _coordinator(hass)
+    coordinator.entry_id = "01TESTENTRY"
+    key = (DOMAIN, coordinator._issue_id())
+    bad = bytes.fromhex("5858d9302a") + _EMBEDDED_MAC + bytes(15)
+    for _ in range(5):
+        coordinator._advertisement(_service_info(bad), None)
+    assert key in ir.async_get(hass).issues
+
+    coordinator._advertisement(_service_info(_frame(mass=500, hr=0, imp=0)), None)
+    assert key not in ir.async_get(hass).issues
 
 
 @pytest.mark.parametrize("token", [None, bytes(12)])

@@ -12,6 +12,7 @@
   "documentation": "https://github.com/kbpk/xiaomi-s400-homeassistant#readme",
   "integration_type": "device",
   "iot_class": "local_push",
+  "quality_scale": "gold",
   "issue_tracker": "https://github.com/kbpk/xiaomi-s400-homeassistant/issues",
   "requirements": [],
   "version": "0.2.1"

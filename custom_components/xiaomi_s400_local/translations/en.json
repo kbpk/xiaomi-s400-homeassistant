@@ -71,5 +71,19 @@
     "binary_sensor": {
       "stabilized": {"name": "Measurement stabilized"}
     }
+  },
+  "issues": {
+    "invalid_bindkey": {
+      "title": "Xiaomi S400 credentials are invalid",
+      "description": "The advertisements from {address} can no longer be decrypted. Extract the bindkey again and update the integration."
+    }
+  },
+  "fix_flow": {
+    "step": {
+      "confirm": {
+        "title": "Update the Xiaomi S400 credentials",
+        "description": "Select submit, then use Reconfigure on the integration to enter the new bindkey and token."
+      }
+    }
   }
 }

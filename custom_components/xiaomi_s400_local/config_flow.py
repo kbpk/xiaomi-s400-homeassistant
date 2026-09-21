@@ -203,7 +203,7 @@ class S400ConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_bluetooth(self, discovery_info) -> ConfigFlowResult:
+    async def async_step_bluetooth(self, discovery_info: Any) -> ConfigFlowResult:
         pid = product_id_from_service_data(
             discovery_info.service_data.get(MIBEACON_UUID)
         )
