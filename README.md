@@ -65,6 +65,38 @@ Manual installation means copying the `custom_components/xiaomi_s400_local`
 directory into the `custom_components` directory of a Home Assistant instance
 and restarting HA.
 
+## Obtaining the bindkey
+
+The S400 broadcasts its measurements as **encrypted** MiBeacon frames, so Home
+Assistant needs the scale's 16-byte **bindkey** to decrypt them. There is no way
+to derive an existing bindkey locally — it is generated once when the scale is
+paired — so it has to be read from your Xiaomi account:
+
+1. Add the scale to the **Xiaomi Home** app and weigh yourself once. This mints
+   the bindkey.
+2. Run the [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor)
+   (`python token_extractor.py`). Log in with the Xiaomi account: QR login,
+   e-mail/password, 2FA and captcha are supported interactively, so 2FA is not a
+   blocker. Pick your region (e.g. `de` for Europe).
+3. Find the S400 in the output and copy:
+   - **`BLE KEY`** — the 16-byte bindkey (32 hex characters). **Required.**
+   - **`TOKEN`** — the 12-byte login token (24 hex characters). Optional; only
+     needed for the active GATT stream.
+4. Enter the bindkey (and optionally the token) in the integration's setup or
+   **Reconfigure** dialog.
+
+Notes:
+
+- The 12-byte token is **not** the bindkey. Passive weight, heart rate and
+  impedance only need the bindkey; the token is only for the optional active
+  GATT connection.
+- The bindkey rotates if you factory-reset the scale or remove and re-add it in
+  the Xiaomi Home app. Re-run the extractor and update the integration through
+  **Reconfigure**. The integration raises a repair issue when advertisements stop
+  decrypting.
+- The e-mail/password re-authentication inside Home Assistant is unreliable for
+  the S400; the extractor above is the route that works.
+
 ## First diagnostic trace
 
 Existing captures can be analysed in WSL without a Bluetooth adapter:
