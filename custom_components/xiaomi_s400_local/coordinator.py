@@ -85,6 +85,19 @@ class S400Coordinator:
                 await self._active_task
             self._active_task = None
 
+    def _note_error(self, err: object) -> None:
+        """Record a failure and log the healthy -> failing transition once."""
+        message = str(err)
+        if self.last_error is None:
+            _LOGGER.warning("Xiaomi S400 %s is not reachable: %s", self.address, message)
+        self.last_error = message
+
+    def _clear_error(self) -> None:
+        """Clear a recorded failure and log the failing -> healthy transition once."""
+        if self.last_error is not None:
+            _LOGGER.info("Xiaomi S400 %s is reachable again", self.address)
+        self.last_error = None
+
     @callback
     def add_listener(self, listener: Callable[[], None]) -> CALLBACK_TYPE:
         self._listeners.add(listener)
@@ -106,10 +119,10 @@ class S400Coordinator:
         try:
             update = parse_mibeacon(self.address, raw, self.bindkey)
         except AdvertisementError as err:
-            self.last_error = str(err)
+            self._note_error(err)
             _LOGGER.debug("Discarding S400 advertisement: %s", err)
             return
-        self.last_error = None
+        self._clear_error()
         parsed = asdict(update)
         for key in (
             "weight",
@@ -162,7 +175,7 @@ class S400Coordinator:
             await transport.official_init()
             await transport.finish_subscriptions()
             keys = await _login(transport, self.token)
-            self.last_error = None
+            self._clear_error()
             frames = CmtpFrames()
             queue = transport.queues[CMTP]
             while client.is_connected:
@@ -186,7 +199,7 @@ class S400Coordinator:
         except CancelledError:
             raise
         except Exception as err:
-            self.last_error = f"active GATT: {type(err).__name__}: {err}"
+            self._note_error(f"active GATT: {type(err).__name__}: {err}")
             _LOGGER.debug("S400 active session ended: %s", err)
             self._notify_listeners()
         finally:
@@ -207,7 +220,7 @@ class S400Coordinator:
                 self.values[key] = value
         self.values["stabilized"] = measurement.stabilized
         self.values["last_seen"] = datetime.now(UTC)
-        self.last_error = None
+        self._clear_error()
         self._notify_listeners()
 
     @callback
