@@ -19,6 +19,10 @@
         "data": {
           "address": "Bluetooth address",
           "setup_method": "Setup method"
+        },
+        "data_description": {
+          "address": "The six-byte Bluetooth address of the scale, as offered in the dropdown.",
+          "setup_method": "Use Existing keys when the scale is already paired in the Xiaomi Home app. Local provisioning is only for a factory-reset scale."
         }
       },
       "pair": {
@@ -31,6 +35,22 @@
         "data": {
           "bindkey": "Bindkey (32 hex characters)",
           "token": "Login token (24 hex characters, optional)"
+        },
+        "data_description": {
+          "bindkey": "Extracted once from the Xiaomi Cloud Tokens Extractor. It decrypts the scale's advertisements.",
+          "token": "Optional. Only needed for the active GATT stream. Leave empty for passive-only operation."
+        }
+      },
+      "reconfigure": {
+        "title": "Update credentials",
+        "description": "Replace the stored bindkey and/or token, for example after re-pairing the scale in the Xiaomi Home app.",
+        "data": {
+          "bindkey": "Bindkey (32 hex characters)",
+          "token": "Login token (24 hex characters, optional)"
+        },
+        "data_description": {
+          "bindkey": "Extracted once from the Xiaomi Cloud Tokens Extractor. It decrypts the scale's advertisements.",
+          "token": "Optional. Only needed for the active GATT stream. Leave empty for passive-only operation."
         }
       },
       "discovery_confirm": {

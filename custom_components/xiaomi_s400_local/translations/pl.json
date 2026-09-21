@@ -1,47 +1,75 @@
 {
-  "title": "Xiaomi S400 lokalnie",
+  "title": "Xiaomi S400 Local",
   "config": {
     "abort": {
       "already_configured": "Ta waga jest już skonfigurowana.",
       "not_supported": "To urządzenie Bluetooth nie jest obsługiwaną wagą S400."
     },
     "error": {
-      "device_not_found": "Waga jest nieosiągalna. Wybudź ją i spróbuj ponownie.",
+      "device_not_found": "Waga jest obecnie nieosiągalna. Obudź ją i spróbuj ponownie.",
       "invalid_address": "Podaj sześciobajtowy adres MAC Bluetooth.",
-      "invalid_key": "Bindkey musi mieć 32 znaki hex, a opcjonalny token 24 znaki hex.",
-      "pairing_failed": "Waga odrzuciła lub nie zakończyła lokalnego provisioningu. Zresetuj ją, wybudź i spróbuj ponownie.",
-      "registration_unsupported": "Ta wersja parowania nie jest jeszcze obsługiwana lokalnie. Ponowny reset nie pomoże. Jeśli masz już bindkey, wybierz konfigurację z istniejącymi kluczami."
+      "invalid_key": "Bindkey musi mieć 32 znaki hex, a token – jeśli podany – 24 znaki hex.",
+      "pairing_failed": "Waga odrzuciła lokalne parowanie lub go nie ukończyła. Zresetuj i obudź wagę, a następnie spróbuj ponownie.",
+      "registration_unsupported": "Lokalne parowanie nie obsługuje jeszcze tej wersji protokołu. Kolejny reset nie pomoże. Jeśli masz już bindkey, wybierz Existing keys."
     },
     "step": {
       "user": {
-        "title": "Konfiguracja Xiaomi S400",
-        "description": "Wybierz wagę i całkowicie lokalną metodę konfiguracji.",
-        "data": {"address": "Adres Bluetooth", "setup_method": "Metoda konfiguracji"}
+        "title": "Skonfiguruj Xiaomi S400",
+        "description": "Wybierz wagę i w pełni lokalną metodę konfiguracji.",
+        "data": {
+          "address": "Adres Bluetooth",
+          "setup_method": "Metoda konfiguracji"
+        },
+        "data_description": {
+          "address": "Sześciobajtowy adres Bluetooth wagi, oferowany na liście.",
+          "setup_method": "Użyj Existing keys, jeśli waga jest już sparowana w aplikacji Xiaomi Home. Local provisioning jest tylko dla wagi po resecie fabrycznym."
+        }
       },
       "pair": {
-        "title": "Lokalny provisioning",
-        "description": "Przywróć ustawienia fabryczne i wybudź wagę, trzymaj ją blisko adaptera Bluetooth Home Assistanta, a następnie zatwierdź. Operacja tworzy nowe lokalne klucze i zastępuje wcześniejsze powiązanie z Mi Home."
+        "title": "Parowanie lokalne",
+        "description": "Zresetuj fabrycznie i obudź wagę, trzymaj ją blisko adaptera Bluetooth Home Assistant, a następnie zatwierdź. Tworzy to nowe lokalne poświadczenia i zastępuje poprzednią własność Mi Home."
       },
       "keys": {
-        "title": "Istniejące klucze lokalne",
-        "description": "16-bajtowy bindkey umożliwia odbiór reklam. Dodaj 12-bajtowy token, aby Home Assistant łączył się po wybudzeniu wagi i automatycznie odbierał bieżące oraz końcowe pomiary przez GATT.",
-        "data": {"bindkey": "Bindkey (32 znaki hex)", "token": "Token login (24 znaki hex, opcjonalny)"}
+        "title": "Użyj istniejących lokalnych poświadczeń",
+        "description": "16-bajtowy bindkey umożliwia odbiór reklam pasywnych. Dodaj 12-bajtowy token, aby Home Assistant łączył się po wybudzeniu wagi i odbierał automatycznie pomiary bieżące i końcowe przez GATT.",
+        "data": {
+          "bindkey": "Bindkey (32 znaki hex)",
+          "token": "Token logowania (24 znaki hex, opcjonalny)"
+        },
+        "data_description": {
+          "bindkey": "Wyodrębniony jednorazowo za pomocą Xiaomi Cloud Tokens Extractor. Odszyfrowuje reklamy wagi.",
+          "token": "Opcjonalny. Potrzebny tylko do aktywnego strumienia GATT. Pozostaw pusty dla trybu pasywnego."
+        }
+      },
+      "reconfigure": {
+        "title": "Zaktualizuj poświadczenia",
+        "description": "Zastąp zapisany bindkey i/lub token, na przykład po ponownym sparowaniu wagi w aplikacji Xiaomi Home.",
+        "data": {
+          "bindkey": "Bindkey (32 znaki hex)",
+          "token": "Token logowania (24 znaki hex, opcjonalny)"
+        },
+        "data_description": {
+          "bindkey": "Wyodrębniony jednorazowo za pomocą Xiaomi Cloud Tokens Extractor. Odszyfrowuje reklamy wagi.",
+          "token": "Opcjonalny. Potrzebny tylko do aktywnego strumienia GATT. Pozostaw pusty dla trybu pasywnego."
+        }
       },
       "discovery_confirm": {
         "title": "Wykryto Xiaomi S400",
-        "description": "Kontynuuj lokalny provisioning. Operacja zastąpi wcześniejsze powiązanie z Mi Home."
+        "description": "Przejdź do lokalnego parowania. Zastępuje to poprzednią własność Mi Home."
       }
     }
   },
   "entity": {
     "sensor": {
-      "weight": {"name": "Masa"},
+      "weight": {"name": "Waga"},
       "heart_rate": {"name": "Tętno"},
       "impedance_low": {"name": "Impedancja 50 kHz"},
       "impedance_high": {"name": "Impedancja 250 kHz"},
-      "profile_id": {"name": "Identyfikator profilu"},
+      "profile_id": {"name": "ID profilu"},
       "signal_strength": {"name": "Siła sygnału"}
     },
-    "binary_sensor": {"stabilized": {"name": "Pomiar ustabilizowany"}}
+    "binary_sensor": {
+      "stabilized": {"name": "Pomiar ustabilizowany"}
+    }
   }
 }

@@ -1,0 +1,13 @@
+{
+  "entity": {
+    "sensor": {
+      "heart_rate": {"default": "mdi:heart-pulse"},
+      "impedance_low": {"default": "mdi:omega"},
+      "impedance_high": {"default": "mdi:omega"},
+      "profile_id": {"default": "mdi:account"}
+    },
+    "binary_sensor": {
+      "stabilized": {"default": "mdi:scale-bathroom"}
+    }
+  }
+}
