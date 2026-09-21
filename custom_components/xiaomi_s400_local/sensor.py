@@ -10,7 +10,6 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
@@ -19,9 +18,12 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from . import S400ConfigEntry
 from .coordinator import S400Coordinator
 from .entity import S400Entity
+
+# One entity per decoded field; updates are pushed by the coordinator.
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -40,28 +42,24 @@ SENSORS = (
     S400SensorDescription(
         key="heart_rate",
         translation_key="heart_rate",
-        icon="mdi:heart-pulse",
         native_unit_of_measurement="bpm",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     S400SensorDescription(
         key="impedance_low",
         translation_key="impedance_low",
-        icon="mdi:omega",
         native_unit_of_measurement="Ω",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     S400SensorDescription(
         key="impedance_high",
         translation_key="impedance_high",
-        icon="mdi:omega",
         native_unit_of_measurement="Ω",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     S400SensorDescription(
         key="profile_id",
         translation_key="profile_id",
-        icon="mdi:account",
     ),
     S400SensorDescription(
         key="rssi",
@@ -70,16 +68,17 @@ SENSORS = (
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: S400ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator: S400Coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: S400Coordinator = entry.runtime_data
     async_add_entities(
         S400Sensor(entry, coordinator, description) for description in SENSORS
     )
@@ -92,7 +91,7 @@ class S400Sensor(S400Entity, RestoreSensor):
 
     def __init__(
         self,
-        entry: ConfigEntry,
+        entry: S400ConfigEntry,
         coordinator: S400Coordinator,
         description: S400SensorDescription,
     ) -> None:
