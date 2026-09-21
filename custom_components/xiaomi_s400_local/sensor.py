@@ -10,7 +10,6 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
@@ -19,7 +18,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from . import S400ConfigEntry
 from .coordinator import S400Coordinator
 from .entity import S400Entity
 
@@ -64,6 +63,12 @@ SENSORS = (
         icon="mdi:account",
     ),
     S400SensorDescription(
+        key="measurement_time",
+        translation_key="measurement_time",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    S400SensorDescription(
         key="rssi",
         translation_key="signal_strength",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
@@ -76,10 +81,10 @@ SENSORS = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: S400ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator: S400Coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     async_add_entities(
         S400Sensor(entry, coordinator, description) for description in SENSORS
     )
@@ -92,7 +97,7 @@ class S400Sensor(S400Entity, SensorEntity):
 
     def __init__(
         self,
-        entry: ConfigEntry,
+        entry: S400ConfigEntry,
         coordinator: S400Coordinator,
         description: S400SensorDescription,
     ) -> None:

@@ -3,7 +3,7 @@
 [![Validate](https://github.com/kbpk/xiaomi-s400-homeassistant/actions/workflows/validate.yml/badge.svg)](https://github.com/kbpk/xiaomi-s400-homeassistant/actions/workflows/validate.yml)
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 
-Eksperymentalna integracja HACS dla Xiaomi Body Composition Scale S400
+Integracja HACS dla Xiaomi Body Composition Scale S400
 (`MJTZC01YM`, `yunmai.scales.ms103/ms104/ms107`). Odbiór danych i przechowywanie
 kluczy odbywają się lokalnie. Sama integracja Home Assistant nie zawiera
 klienta Xiaomi Cloud i nie prosi o dane konta Xiaomi. Osobne narzędzie
@@ -11,7 +11,8 @@ laboratoryjne może jednorazowo poprosić backend Xiaomi o podpis wymagany przez
 factory-new S400 z auth version 2.
 
 > [!WARNING]
-> Projekt jest w fazie alpha. Provisioning auth v2 został potwierdzony na S400
+> Odbiór pomiarów w Home Assistant jest nadal w fazie testów sprzętowych.
+> Provisioning auth v2 został potwierdzony na S400
 > z firmware `2.1.1_0006`: waga zwróciła `REGISTER_OK`, a następnie zaakceptowała
 > lokalny login tokenem. Pierwszy bind wymaga jednorazowego podpisania credentialu
 > przez Xiaomi; po nim odbiór danych i loginy GATT są lokalne. Czysto lokalny
@@ -35,6 +36,7 @@ factory-new S400 z auth version 2.
 - automatyczne połączenie po wybudzeniu wagi, login tokenem i lokalny odbiór
   bieżących oraz końcowych pomiarów z szyfrowanego kanału CMTP;
 - redagowanie sekretów z diagnostyki Home Assistanta;
+- możliwość zmiany lokalnych kluczy przez **Reconfigure** bez usuwania urządzenia;
 - samodzielne narzędzia do GATT trace i pairingu na Raspberry Pi OS/Debianie.
 
 Starsza sekwencja standard-auth pochodzi z analizy implementacji open source.
@@ -44,18 +46,30 @@ więc nie zapisze losowych, nieuzgodnionych kluczy.
 
 ## Instalacja przez HACS
 
-1. Dodaj to repozytorium w HACS jako niestandardowe repozytorium typu
-   **Integration**.
+1. Dodaj `https://github.com/kbpk/xiaomi-s400-homeassistant` w HACS jako
+   niestandardowe repozytorium typu **Integration**.
 2. Pobierz **Xiaomi S400 Local** i uruchom ponownie Home Assistant.
 3. Wybudź wagę i wybierz
    **Ustawienia → Urządzenia i usługi → Dodaj integrację → Xiaomi S400 Local**.
-4. Jeżeli masz już bindkey i token, wybierz `Existing keys`. Token uruchamia
-   automatyczny aktywny odbiór GATT; bez niego pozostaje odbiór reklam FE95.
+4. Wybierz wykryty adres wagi lub wpisz MAC ręcznie. W następnym kroku wprowadź
+   `bindkey` (32 znaki hex) i opcjonalnie `token` (24 znaki hex) z lokalnego
+   pliku `private/s400-secrets.json`. Token włącza automatyczny aktywny odbiór
+   GATT; bez niego pozostaje odbiór reklam FE95.
 
-Opcja `Local provisioning` jest obecnie przeznaczona do eksperymentów i zapisze
-klucze tylko wtedy, gdy waga potwierdzi rejestrację oraz późniejszy login. Do
-pasywnych reklam token nie jest potrzebny. Automatyczny aktywny strumień GATT
-wymaga tokenu.
+Konfiguracja w HA **nie wykonuje pierwszego parowania** i nie resetuje wagi.
+Jeśli klucze zmienią się po ponownym provisioningu, otwórz menu integracji i
+wybierz **Reconfigure**, aby podać nowy bindkey i token. Klucze są przechowywane
+w danych wpisu konfiguracyjnego HA, więc zabezpiecz jego katalog `.storage`
+oraz kopie zapasowe. Nie wklejaj kluczy do zgłoszeń i logów.
+
+Encje: masa, tętno, impedancja 50 i 250 kHz, identyfikator profilu, stabilność
+pomiaru, czas końcowego pomiaru, RSSI i diagnostyczny stan połączenia GATT.
+Oznaczenia częstotliwości impedancji są wnioskowane z kolejności ramek i
+wartości S400; nie mamy jeszcze bezpośredniego pomiaru częstotliwości na
+elektrodach. Integracja udostępnia surowe dane BIA, ale nie wylicza procentu
+tkanki tłuszczowej ani innych wartości zależnych od niezweryfikowanych wzorów.
+Masa pozostaje ostatnim odczytem także po uśpieniu wagi; nowy niestabilny
+pomiar czyści dane impedancji i tętna poprzedniego ważenia.
 
 Instalacja ręczna polega na skopiowaniu katalogu
 `custom_components/xiaomi_s400_local` do katalogu `custom_components`
@@ -170,6 +184,30 @@ automatycznie odrzuconej captchy.
 Po sukcesie Xiaomi nie jest potrzebne do działania integracji. W Home Assistant
 wprowadź 32 znaki `bindkey` i 24 znaki `token` z pliku wynikowego. Narzędzie nie
 pobiera istniejących kluczy z konta i nie wylicza pomiarów w chmurze.
+
+## Test lokalnego odbioru
+
+Na Windows z adapterem ASUS USB-BT400 można sprawdzić zapisane klucze bez
+uruchamiania Home Assistanta ani logowania do Xiaomi:
+
+```powershell
+$repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
+uv run --no-project --with-requirements "$repo\requirements-lab.txt" `
+  "$repo\tools\s400_verify_local.py" `
+  --secrets "$repo\private\s400-secrets.json" --duration 60
+```
+
+Wybudź wagę podczas skanowania, a po komunikacie `Local token login: OK` stań
+na niej do końca pomiaru. Skrypt wypisuje tylko zdekodowane FE95/GATT i liczbę
+odebranych pomiarów; nie wypisuje bindkeya, tokenu ani surowych ramek. Zmień
+ścieżkę dystrybucji WSL, jeśli `wsl -l -v` pokazuje inną nazwę niż `Ubuntu`.
+
+Jeśli HA widzi wagę, lecz nie aktualizuje encji, upewnij się, że adapter
+Bluetooth jest dostępny dla hosta HA, MAC zgadza się z plikiem sekretów i
+pomiar został zakończony. `invalid authentication tag` w diagnostyce wskazuje
+na błędny bindkey lub adres; `PairingError` po połączeniu GATT może oznaczać
+nieaktualny token. Po resecie fabrycznym klucze przestają pasować i konieczne
+jest ponowne pierwsze parowanie.
 
 Test sprzętowy z 2026-09-21 potwierdził negocjację DMTU 242, transfer
 wieloramkowego certyfikatu, lokalną weryfikację obu podpisów, odpowiedź

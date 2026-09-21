@@ -6,42 +6,70 @@
       "not_supported": "To urządzenie Bluetooth nie jest obsługiwaną wagą S400."
     },
     "error": {
-      "device_not_found": "Waga jest nieosiągalna. Wybudź ją i spróbuj ponownie.",
       "invalid_address": "Podaj sześciobajtowy adres MAC Bluetooth.",
-      "invalid_key": "Bindkey musi mieć 32 znaki hex, a opcjonalny token 24 znaki hex.",
-      "pairing_failed": "Waga odrzuciła lub nie zakończyła lokalnego provisioningu. Zresetuj ją, wybudź i spróbuj ponownie.",
-      "registration_unsupported": "Ta wersja parowania nie jest jeszcze obsługiwana lokalnie. Ponowny reset nie pomoże. Jeśli masz już bindkey, wybierz konfigurację z istniejącymi kluczami."
+      "invalid_key": "Bindkey musi mieć 32 znaki hex, a opcjonalny token 24 znaki hex."
     },
     "step": {
       "user": {
         "title": "Konfiguracja Xiaomi S400",
-        "description": "Wybierz wagę i całkowicie lokalną metodę konfiguracji.",
-        "data": {"address": "Adres Bluetooth", "setup_method": "Metoda konfiguracji"}
-      },
-      "pair": {
-        "title": "Lokalny provisioning",
-        "description": "Przywróć ustawienia fabryczne i wybudź wagę, trzymaj ją blisko adaptera Bluetooth Home Assistanta, a następnie zatwierdź. Operacja tworzy nowe lokalne klucze i zastępuje wcześniejsze powiązanie z Mi Home."
+        "description": "Wybierz wagę i wprowadź jej istniejące lokalne klucze BLE.",
+        "data": {
+          "address": "Adres Bluetooth"
+        }
       },
       "keys": {
         "title": "Istniejące klucze lokalne",
-        "description": "16-bajtowy bindkey umożliwia odbiór reklam. Dodaj 12-bajtowy token, aby Home Assistant łączył się po wybudzeniu wagi i automatycznie odbierał bieżące oraz końcowe pomiary przez GATT.",
-        "data": {"bindkey": "Bindkey (32 znaki hex)", "token": "Token login (24 znaki hex, opcjonalny)"}
+        "description": "Wprowadź 16-bajtowy bindkey uzyskany podczas pierwszego parowania. Opcjonalny 12-bajtowy token umożliwia automatyczny lokalny login GATT i pomiary na żywo.",
+        "data": {
+          "bindkey": "Bindkey (32 znaki hex)",
+          "token": "Token login (24 znaki hex, opcjonalny)"
+        }
       },
       "discovery_confirm": {
         "title": "Wykryto Xiaomi S400",
-        "description": "Kontynuuj lokalny provisioning. Operacja zastąpi wcześniejsze powiązanie z Mi Home."
+        "description": "Wprowadź istniejący bindkey wagi oraz opcjonalny token GATT. Ten krok nie resetuje ani nie paruje wagi."
+      },
+      "reconfigure": {
+        "title": "Zmień lokalne klucze",
+        "description": "Zastąp bindkey i token po ponownym sparowaniu wagi. Pusty token oznacza tylko pasywny odbiór BLE.",
+        "data": {
+          "bindkey": "Bindkey (32 znaki hex)",
+          "token": "Token login (24 znaki hex, opcjonalny)"
+        }
       }
     }
   },
   "entity": {
     "sensor": {
-      "weight": {"name": "Masa"},
-      "heart_rate": {"name": "Tętno"},
-      "impedance_low": {"name": "Impedancja 50 kHz"},
-      "impedance_high": {"name": "Impedancja 250 kHz"},
-      "profile_id": {"name": "Identyfikator profilu"},
-      "signal_strength": {"name": "Siła sygnału"}
+      "weight": {
+        "name": "Masa"
+      },
+      "heart_rate": {
+        "name": "Tętno"
+      },
+      "impedance_low": {
+        "name": "Impedancja 50 kHz"
+      },
+      "impedance_high": {
+        "name": "Impedancja 250 kHz"
+      },
+      "profile_id": {
+        "name": "Identyfikator profilu"
+      },
+      "signal_strength": {
+        "name": "Siła sygnału"
+      },
+      "measurement_time": {
+        "name": "Czas pomiaru"
+      }
     },
-    "binary_sensor": {"stabilized": {"name": "Pomiar ustabilizowany"}}
+    "binary_sensor": {
+      "stabilized": {
+        "name": "Pomiar ustabilizowany"
+      },
+      "gatt_connected": {
+        "name": "Połączono przez GATT"
+      }
+    }
   }
 }
