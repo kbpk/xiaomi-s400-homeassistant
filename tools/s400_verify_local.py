@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import json
 import sys
+from collections import Counter
 from dataclasses import asdict
 from importlib import import_module
 from pathlib import Path
@@ -30,9 +31,14 @@ def load_core() -> ModuleType:
     return package
 
 
-class _NoTrace:
+class _CountTrace:
+    def __init__(self) -> None:
+        self.notifications: Counter[str] = Counter()
+
     def record(self, event: str, **values: object) -> None:
-        """Drop raw protocol data and long-lived credentials."""
+        """Count GATT notifications without retaining their contents."""
+        if event == "notify":
+            self.notifications[str(values["uuid"])] += 1
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -54,10 +60,12 @@ async def run(args: argparse.Namespace) -> int:
 
     found = None
     advertisements = 0
+    advertisement_objects = 0
+    advertisement_errors: Counter[str] = Counter()
     measurements = 0
 
     def on_advertisement(device, advertisement) -> None:
-        nonlocal found, advertisements, measurements
+        nonlocal found, advertisements, advertisement_objects, measurements
         if device.address.upper() != address:
             return
         raw = advertisement.service_data.get(constants.MIBEACON_UUID)
@@ -65,9 +73,12 @@ async def run(args: argparse.Namespace) -> int:
             return
         found = device
         advertisements += 1
+        if len(raw) >= 2 and int.from_bytes(raw[:2], "little") & (1 << 6):
+            advertisement_objects += 1
         try:
             decoded = parser.parse_mibeacon(address, raw, bindkey)
-        except parser.AdvertisementError:
+        except parser.AdvertisementError as error:
+            advertisement_errors[str(error)] += 1
             return
         if any(
             value is not None
@@ -84,19 +95,28 @@ async def run(args: argparse.Namespace) -> int:
     print(f"Scanning for {address} for {args.scan_duration:g} seconds...", flush=True)
     async with BleakScanner(detection_callback=on_advertisement):
         await asyncio.sleep(args.scan_duration)
-    print(f"FE95: {advertisements} advertisements, {measurements} measurements")
+    print(
+        f"FE95: {advertisements} advertisements, "
+        f"{advertisement_objects} object frames, {measurements} measurements, "
+        f"errors={dict(advertisement_errors)}"
+    )
+    if args.scan_only:
+        return 0 if measurements else 1
     if found is None:
         print("Scale not seen. Wake it and retry.")
         return 1
 
     async with BleakClient(found, timeout=20.0) as client:
-        transport = pairing._GattTransport(client, _NoTrace(), timeout=12.0)
+        trace = _CountTrace()
+        transport = pairing._GattTransport(client, trace, timeout=12.0)
         await transport.start_official_order()
         await transport.official_init()
         await transport.finish_subscriptions()
         keys = await pairing._login(transport, token)
-        print("Local token login: OK", flush=True)
+        print("Local token login: OK; ready for measurement", flush=True)
         frames = active.CmtpFrames()
+        complete_frames = 0
+        rejected_frames = 0
         decoded_count = 0
         deadline = asyncio.get_running_loop().time() + args.duration
         queue = transport.queues[protocol.CMTP]
@@ -122,15 +142,21 @@ async def run(args: argparse.Namespace) -> int:
                 continue
             if complete is None:
                 continue
+            complete_frames += 1
             await transport.write(protocol.CMTP, protocol.RCV_OK)
             try:
                 measurement = active.decode_cmtp(keys, complete)
             except (InvalidTag, ValueError):
+                rejected_frames += 1
                 continue
             if measurement is not None:
                 decoded_count += 1
                 print("GATT", json.dumps(asdict(measurement), sort_keys=True))
-        print(f"GATT: {decoded_count} decoded measurements")
+        print(
+            f"GATT: {trace.notifications[protocol.CMTP]} CMTP notifications, "
+            f"{complete_frames} complete frames, {rejected_frames} rejected frames, "
+            f"{decoded_count} decoded measurements"
+        )
     return 0
 
 
@@ -143,6 +169,7 @@ def parse_args() -> argparse.Namespace:
     )
     arguments.add_argument("--scan-duration", type=float, default=8.0)
     arguments.add_argument("--duration", type=float, default=60.0)
+    arguments.add_argument("--scan-only", action="store_true")
     args = arguments.parse_args()
     if args.scan_duration <= 0 or args.duration <= 0:
         arguments.error("durations must be positive")
