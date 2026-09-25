@@ -155,8 +155,12 @@ class S400ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_BINDKEY): str,
-                    vol.Optional(CONF_TOKEN): str,
+                    vol.Required(
+                        CONF_BINDKEY, default=entry.data.get(CONF_BINDKEY, "")
+                    ): str,
+                    vol.Optional(
+                        CONF_TOKEN, default=entry.data.get(CONF_TOKEN, "")
+                    ): str,
                 }
             ),
             errors=errors,
