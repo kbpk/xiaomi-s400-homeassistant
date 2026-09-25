@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import CONF_BINDKEY, CONF_TOKEN
 from .coordinator import S400Coordinator
@@ -22,6 +23,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: S400ConfigEntry) -> bool
         entry.data["address"],
         bytes.fromhex(entry.data[CONF_BINDKEY]),
         bytes.fromhex(token_hex) if token_hex else None,
+        entry.entry_id,
     )
     entry.runtime_data = coordinator
     coordinator.start()
@@ -38,4 +40,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: S400ConfigEntry) -> boo
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
     await entry.runtime_data.stop()
+    return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: S400ConfigEntry,
+    device_entry: DeviceEntry,
+) -> bool:
+    """Allow removing a stale device from the config entry.
+
+    The S400 advertises a single device per config entry, and the coordinator
+    keeps no per-device state, so removal is always safe.
+    """
     return True

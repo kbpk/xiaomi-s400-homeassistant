@@ -1,0 +1,94 @@
+rules:
+  # Bronze
+  action-setup:
+    status: exempt
+    comment: The integration registers no service actions.
+  appropriate-polling:
+    status: exempt
+    comment: The scale is a passive Bluetooth push device; there is no polling.
+  brands:
+    status: exempt
+    comment: Custom (HACS) integration; brand assets cannot be added to home-assistant/brands.
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage:
+    status: todo
+    comment: The current config flow has 74% coverage after rebasing onto main.
+  dependency-transparency: done
+  docs-actions:
+    status: exempt
+    comment: No service actions are provided.
+  docs-triggers:
+    status: exempt
+    comment: No triggers are provided.
+  docs-conditions:
+    status: exempt
+    comment: No conditions are provided.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup:
+    status: exempt
+    comment: The scale is a passive Bluetooth device; there is no connection to test at setup time.
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions:
+    status: exempt
+    comment: No service actions are provided.
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow:
+    status: exempt
+    comment: The integration has no account authentication. The bindkey/token can be changed through the reconfigure flow.
+  test-coverage:
+    status: todo
+    comment: Total coverage is 94%; setup and coordinator branches need more tests.
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery: done
+  discovery-update-info:
+    status: exempt
+    comment: The device only advertises over Bluetooth; there is no network address to update.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: One config entry maps to exactly one scale.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: done
+  entity-translations: done
+  exception-translations:
+    status: exempt
+    comment: The integration raises no runtime exceptions to the user; config flow failures are reported through error translations.
+  icon-translations: done
+  reconfiguration-flow: done
+  repair-issues: done
+  stale-devices: done
+
+  # Platinum
+  async-dependency:
+    status: exempt
+    comment: The integration has no external dependency; it uses Home Assistant's own Bluetooth stack.
+  inject-websession:
+    status: exempt
+    comment: The integration makes no HTTP requests.
+  strict-typing: done

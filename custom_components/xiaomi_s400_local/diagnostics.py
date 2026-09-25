@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.core import HomeAssistant
 
 from . import S400ConfigEntry
 from .const import CONF_BINDKEY, CONF_TOKEN
+from .coordinator import S400Coordinator
 
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: S400ConfigEntry
-) -> dict:
+) -> dict[str, Any]:
     """Return state while replacing long-lived secrets."""
-    coordinator = entry.runtime_data
+    coordinator: S400Coordinator = entry.runtime_data
     config = dict(entry.data)
     if config.get(CONF_BINDKEY):
         config[CONF_BINDKEY] = "**REDACTED**"

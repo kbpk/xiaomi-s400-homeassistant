@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
-    SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
@@ -21,6 +22,9 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import S400ConfigEntry
 from .coordinator import S400Coordinator
 from .entity import S400Entity
+
+# One entity per decoded field; updates are pushed by the coordinator.
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -39,28 +43,24 @@ SENSORS = (
     S400SensorDescription(
         key="heart_rate",
         translation_key="heart_rate",
-        icon="mdi:heart-pulse",
         native_unit_of_measurement="bpm",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     S400SensorDescription(
         key="impedance_low",
         translation_key="impedance_low",
-        icon="mdi:omega",
         native_unit_of_measurement="Ω",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     S400SensorDescription(
         key="impedance_high",
         translation_key="impedance_high",
-        icon="mdi:omega",
         native_unit_of_measurement="Ω",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     S400SensorDescription(
         key="profile_id",
         translation_key="profile_id",
-        icon="mdi:account",
     ),
     S400SensorDescription(
         key="measurement_time",
@@ -75,6 +75,7 @@ SENSORS = (
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
 )
 
@@ -84,13 +85,13 @@ async def async_setup_entry(
     entry: S400ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator = entry.runtime_data
+    coordinator: S400Coordinator = entry.runtime_data
     async_add_entities(
         S400Sensor(entry, coordinator, description) for description in SENSORS
     )
 
 
-class S400Sensor(S400Entity, SensorEntity):
+class S400Sensor(S400Entity, RestoreSensor):
     """One decoded measurement field."""
 
     entity_description: S400SensorDescription
@@ -105,5 +106,16 @@ class S400Sensor(S400Entity, SensorEntity):
         self.entity_description = description
 
     @property
-    def native_value(self):
-        return self.coordinator.values[self._key]
+    def native_value(self) -> float | int | None:
+        return cast(float | int | None, self.coordinator.values[self._key])
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last measurement so a restart does not blank the entities."""
+        await super().async_added_to_hass()
+        if self.coordinator.values.get(self._key) is not None:
+            return
+        last = await self.async_get_last_sensor_data()
+        if last is None or last.native_value is None:
+            return
+        self.coordinator.values[self._key] = last.native_value
+        self.async_write_ha_state()

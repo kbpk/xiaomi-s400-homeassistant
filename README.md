@@ -3,111 +3,138 @@
 [![Validate](https://github.com/kbpk/xiaomi-s400-homeassistant/actions/workflows/validate.yml/badge.svg)](https://github.com/kbpk/xiaomi-s400-homeassistant/actions/workflows/validate.yml)
 [![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 
-Integracja HACS dla Xiaomi Body Composition Scale S400
-(`MJTZC01YM`, `yunmai.scales.ms103/ms104/ms107`). Odbiór danych i przechowywanie
-kluczy odbywają się lokalnie. Sama integracja Home Assistant nie zawiera
-klienta Xiaomi Cloud i nie prosi o dane konta Xiaomi. Osobne narzędzie
-laboratoryjne może jednorazowo poprosić backend Xiaomi o podpis wymagany przez
-factory-new S400 z auth version 2.
+[Polska wersja](README.pl.md)
+
+Experimental HACS integration for the Xiaomi Body Composition Scale S400
+(`MJTZC01YM`, `yunmai.scales.ms103/ms104/ms107`). Data reception and key storage
+happen locally. The Home Assistant integration itself contains no Xiaomi Cloud
+client and does not ask for Xiaomi account credentials. A separate lab tool can
+request a one-time signature from the Xiaomi backend, which a factory-new S400
+with auth version 2 requires.
 
 > [!WARNING]
-> Odbiór pomiarów w Home Assistant jest nadal w fazie testów sprzętowych.
-> Provisioning auth v2 został potwierdzony na S400
-> z firmware `2.1.1_0006`: waga zwróciła `REGISTER_OK`, a następnie zaakceptowała
-> lokalny login tokenem. Pierwszy bind wymaga jednorazowego podpisania credentialu
-> przez Xiaomi; po nim odbiór danych i loginy GATT są lokalne. Czysto lokalny
-> provisioner nadal obsługuje tylko starszy auth version 1. Szczegółowe dowody,
-> granice zgodności i analiza bez Bluetooth: [AUTH_V2.md](research/AUTH_V2.md).
-> [Analiza oficjalnego APK Mi Home](research/MIHOME_V2.md) niezależnie
-> potwierdza tę kolejność i identyfikuje brakujące poświadczenie rejestracji.
+> Measurement reception in Home Assistant still needs further hardware testing.
+> Auth v2 provisioning was confirmed on an S400 with
+> firmware `2.1.1_0006`: the scale returned `REGISTER_OK` and then accepted a
+> local login with the token. The first bind requires a one-time credential
+> signature from Xiaomi; afterwards data reception and GATT logins are local.
+> The purely local provisioner still supports only the older auth version 1.
+> Detailed evidence, compatibility limits and the Bluetooth-free analysis are in
+> [AUTH_V2.md](research/AUTH_V2.md). The
+> [analysis of the official Mi Home APK](research/MIHOME_V2.md) independently
+> confirms this order and identifies the missing registration credential.
 
-## Stan implementacji
+## Implementation status
 
-- eksperymentalny provisioning standard-auth version 1 bez OOB przez P-256 ECDH,
-  HKDF-SHA256 i AES-CCM;
-- narzędzie auth v2 wykonujące ECDH lokalnie, proszące Xiaomi tylko o podpisany
-  credential, sprawdzające oba podpisy lokalnie i zweryfikowane na S400 przez
-  `REGISTER_OK` oraz późniejszy login tokenem;
-- analiza captures bez Bluetooth i testowany offline format credentialu v2;
-- zapis 16-bajtowego bindkey i 12-bajtowego tokenu dopiero po odpowiedzi
-  rejestracyjnej urządzenia i poprawnym loginie;
-- odszyfrowywanie MiBeacon v4/v5 oraz encje: masa, tętno, impedancja 50 kHz,
-  impedancja 250 kHz, profil użytkownika, stabilizacja i RSSI;
-- automatyczne połączenie po wybudzeniu wagi, login tokenem i lokalny odbiór
-  bieżących oraz końcowych pomiarów z szyfrowanego kanału CMTP;
-- redagowanie sekretów z diagnostyki Home Assistanta;
-- możliwość zmiany lokalnych kluczy przez **Reconfigure** bez usuwania urządzenia;
-- samodzielne narzędzia do GATT trace i pairingu na Raspberry Pi OS/Debianie.
+- experimental standard-auth version 1 provisioning without OOB via P-256 ECDH,
+  HKDF-SHA256 and AES-CCM;
+- an auth v2 tool that performs ECDH locally, asks Xiaomi only for the signed
+  credential, verifies both signatures locally and was verified on the S400 via
+  `REGISTER_OK` and a subsequent token login;
+- Bluetooth-free capture analysis and an offline-tested auth v2 credential
+  format;
+- storing the 16-byte bindkey and the 12-byte token only after the device's
+  registration response and a successful login;
+- MiBeacon v4/v5 decryption and entities: weight, heart rate, 50 kHz impedance,
+  250 kHz impedance, user profile, stabilization and RSSI;
+- automatic connection when the scale wakes, token login and local reception of
+  live and final measurements from the encrypted CMTP channel;
+- redaction of secrets from Home Assistant diagnostics;
+- self-contained GATT trace and pairing tools for Raspberry Pi OS/Debian.
 
-Starsza sekwencja standard-auth pochodzi z analizy implementacji open source.
-Nie jest zgodna z całą procedurą wersji 2 znalezioną w publicznym SDK.
-Integracja zgłasza sukces dopiero po odpowiedzi `0x11000000` i poprawnym loginie,
-więc nie zapisze losowych, nieuzgodnionych kluczy.
+The older standard-auth sequence comes from analysis of open source
+implementations. It does not match the full version 2 procedure found in the
+public SDK. The integration only reports success after a `0x11000000` response
+and a successful login, so it will not store random, unagreed keys.
 
-## Instalacja przez HACS
+## Installation via HACS
 
-1. Dodaj `https://github.com/kbpk/xiaomi-s400-homeassistant` w HACS jako
-   niestandardowe repozytorium typu **Integration**.
-2. Pobierz **Xiaomi S400 Local** i uruchom ponownie Home Assistant.
-3. Wybudź wagę i wybierz
-   **Ustawienia → Urządzenia i usługi → Dodaj integrację → Xiaomi S400 Local**.
-4. Wybierz wykryty adres wagi lub wpisz MAC ręcznie. W następnym kroku wprowadź
-   `bindkey` (32 znaki hex) i opcjonalnie `token` (24 znaki hex) z lokalnego
-   pliku `private/s400-secrets.json`. Token włącza automatyczny aktywny odbiór
-   GATT; bez niego pozostaje odbiór reklam FE95.
+1. Add this repository to HACS as a custom repository of type **Integration**.
+2. Download **Xiaomi S400 Local** and restart Home Assistant.
+3. Wake the scale and choose
+   **Settings → Devices & services → Add integration → Xiaomi S400 Local**.
+4. Enter the 16-byte bindkey and, optionally, the 12-byte token. The token
+   enables active GATT reception; without it, reception uses FE95 advertisements.
 
-Konfiguracja w HA **nie wykonuje pierwszego parowania** i nie resetuje wagi.
-Jeśli klucze zmienią się po ponownym provisioningu, otwórz menu integracji i
-wybierz **Reconfigure**, aby podać nowy bindkey i token. Klucze są przechowywane
-w danych wpisu konfiguracyjnego HA, więc zabezpiecz jego katalog `.storage`
-oraz kopie zapasowe. Nie wklejaj kluczy do zgłoszeń i logów.
+Home Assistant setup does not pair or reset the scale. Use **Reconfigure** if
+its keys change. Home Assistant stores the keys in the config entry, so protect
+its `.storage` directory and backups.
 
-Encje: masa, tętno, impedancja 50 i 250 kHz, identyfikator profilu, stabilność
-pomiaru, czas końcowego pomiaru, RSSI i diagnostyczny stan połączenia GATT.
-Oznaczenia częstotliwości impedancji są wnioskowane z kolejności ramek i
-wartości S400; nie mamy jeszcze bezpośredniego pomiaru częstotliwości na
-elektrodach. Integracja udostępnia surowe dane BIA, ale nie wylicza procentu
-tkanki tłuszczowej ani innych wartości zależnych od niezweryfikowanych wzorów.
-Masa pozostaje ostatnim odczytem także po uśpieniu wagi; nowy niestabilny
-pomiar czyści dane impedancji i tętna poprzedniego ważenia.
+The 50 and 250 kHz impedance labels are inferred from frame order and values;
+electrode frequencies have not been measured directly. Body composition
+percentages are not calculated from unverified formulas. A new weighing clears
+the previous person's heart rate and impedance values.
 
-Instalacja ręczna polega na skopiowaniu katalogu
-`custom_components/xiaomi_s400_local` do katalogu `custom_components`
-instancji Home Assistanta i ponownym uruchomieniu HA.
+Manual installation means copying the `custom_components/xiaomi_s400_local`
+directory into the `custom_components` directory of a Home Assistant instance
+and restarting HA.
 
-## Pierwszy trace diagnostyczny
+## Obtaining the bindkey
 
-Istniejące captures można przeanalizować w WSL bez adaptera Bluetooth:
+The S400 broadcasts its measurements as **encrypted** MiBeacon frames, so Home
+Assistant needs the scale's 16-byte **bindkey** to decrypt them. There is no way
+to derive an existing bindkey locally — it is generated once when the scale is
+paired — so it has to be read from your Xiaomi account:
+
+1. Add the scale to the **Xiaomi Home** app and weigh yourself once. This mints
+   the bindkey.
+2. Run the [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor)
+  (`uv run python token_extractor.py`). Log in with the Xiaomi account: QR login,
+   e-mail/password, 2FA and captcha are supported interactively, so 2FA is not a
+   blocker. Pick your region (e.g. `de` for Europe).
+3. Find the S400 in the output and copy:
+   - **`BLE KEY`** — the 16-byte bindkey (32 hex characters). **Required.**
+   - **`TOKEN`** — the 12-byte login token (24 hex characters). Optional; only
+     needed for the active GATT stream.
+4. Enter the bindkey (and optionally the token) in the integration's setup or
+   **Reconfigure** dialog.
+
+Notes:
+
+- The 12-byte token is **not** the bindkey. Passive weight, heart rate and
+  impedance only need the bindkey; the token is only for the optional active
+  GATT connection.
+- The bindkey rotates if you factory-reset the scale or remove and re-add it in
+  the Xiaomi Home app. Re-run the extractor and update the integration through
+  **Reconfigure**. The integration raises a repair issue when advertisements stop
+  decrypting.
+- The e-mail/password re-authentication inside Home Assistant is unreliable for
+  the S400; the extractor above is the route that works.
+
+## First diagnostic trace
+
+Existing captures can be analysed in WSL without a Bluetooth adapter:
 
 ```bash
 uv run python tools/s400_analyze_trace.py captures/s400-pair*.jsonl
 ```
 
-Wynik zawiera wersję auth, informację o wymianie kluczy i kolejności `0x13`
-względem danych rejestracji. Nie ujawnia surowych ramek ani kluczy.
+The result contains the auth version, information about the key exchange and the
+order of `0x13` relative to the registration data. It does not reveal raw frames
+or keys.
 
-Na Raspberry Pi OS lub Debianie:
+On Raspberry Pi OS or Debian:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-lab.txt
-.venv/bin/python tools/s400_diag.py --duration 60 --output captures/s400-gatt.jsonl
+uv run --no-project --with-requirements requirements-lab.txt \
+  tools/s400_diag.py --duration 60 --output captures/s400-gatt.jsonl
 ```
 
-Bleak korzysta z usługi D-Bus BlueZ. Na typowym Raspberry Pi OS wystarcza
-użytkownik mający dostęp do Bluetooth; jeżeli lokalna polityka D-Bus odrzuci
-połączenie, uruchom pojedyncze narzędzie przez `sudo .venv/bin/python ...`.
+Bleak uses the D-Bus BlueZ service. On a typical Raspberry Pi OS a user with
+Bluetooth access is enough; if the local D-Bus policy rejects the connection,
+run the individual tool through `sudo uv run ...`.
 
-Skrypt wykrywa PID S400, wypisuje pełną bazę GATT, subskrybuje wszystkie
-charakterystyki `notify`/`indicate` i zapisuje reklamy oraz powiadomienia do
-JSONL z prawami `0600`. Nie wysyła komend auth. Opcja `--read` dodatkowo czyta
-charakterystyki oznaczone przez GATT jako czytelne.
+The script detects the S400 PID, prints the full GATT database, subscribes to
+all `notify`/`indicate` characteristics and writes advertisements and
+notifications to JSONL with `0600` permissions. It does not send auth commands.
+The `--read` option additionally reads characteristics marked as readable by
+GATT.
 
 ### Windows / WSL
 
-WSL nie korzysta automatycznie ze stosu Bluetooth Windows. Bez przekazanego
-adaptera USB narzędzia można uruchomić bezpośrednio przez Windows Python i
-backend WinRT biblioteki Bleak:
+WSL does not automatically use the Windows Bluetooth stack. Without a passed
+through USB adapter, the tools can be run directly through the Windows Python
+and Bleak's WinRT backend:
 
 ```powershell
 $repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
@@ -116,23 +143,25 @@ uv run --no-project --with-requirements "$repo\requirements-lab.txt" `
   --output "$repo\captures\s400-gatt.jsonl"
 ```
 
-Nazwa dystrybucji `Ubuntu` w ścieżce może być inna; pokaże ją `wsl -l -v`.
-Pliki na Windows dziedziczą ACL katalogu zamiast uniksowego trybu `0600`.
+The distribution name `Ubuntu` in the path may differ; `wsl -l -v` shows it.
+Files on Windows inherit the directory ACL instead of the Unix `0600` mode.
 
-## Samodzielny lokalny pairing
+## Standalone local pairing
 
-Dotyczy wyłącznie eksperymentalnej ścieżki GET_INFO version 1 bez OOB.
-Badana S400 zgłasza version 2 i otrzyma komunikat o braku obsługi.
+This applies only to the experimental GET_INFO version 1 path without OOB. The
+tested S400 reports version 2 and will receive a message that it is not
+supported.
 
-Po factory resecie i wybudzeniu wagi:
+After a factory reset and waking the scale:
 
 ```bash
-.venv/bin/python tools/s400_pair.py \
+uv run --no-project --with-requirements requirements-lab.txt \
+  tools/s400_pair.py \
   --output private/s400-secrets.json \
   --trace captures/s400-pair.jsonl
 ```
 
-Na Windows uruchom ten sam plik przez `uv` i backend WinRT:
+On Windows, run the same file through `uv` and the WinRT backend:
 
 ```powershell
 $repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
@@ -142,82 +171,160 @@ uv run --no-project --with-requirements "$repo\requirements-lab.txt" `
   --trace "$repo\captures\s400-pair.jsonl"
 ```
 
-Opcja `--stage-delay` steruje eksperymentalną przerwą między potwierdzeniem klucza
-publicznego wagi a `SEND_DID` (domyślnie 0 s). Trace zapisuje także zakończenie
-każdego zapisu, rozłączenie i wyjątek, aby odróżnić odrzucenie ramki od błędu
-backendu Bluetooth.
+The `--stage-delay` option controls the experimental pause between the scale's
+public-key acknowledgement and `SEND_DID` (0 s by default). The trace also
+records the completion of every write, the disconnection and the exception, so
+that a rejected frame can be told apart from a Bluetooth backend error.
 
-Plik sekretów ma prawa `0600`. Trace zawiera ramki GATT i klucze publiczne,
-ale nie zawiera wyprowadzonych tokenu, bindkey ani kluczy sesji. Nie publikuj
-pliku `s400-secrets.json`.
+The secrets file has `0600` permissions. The trace contains GATT frames and
+public keys, but not the derived token, bindkey or session keys. Do not publish
+the `s400-secrets.json` file.
 
-## Jednorazowy provisioning auth v2 przez Xiaomi
+## One-time auth v2 provisioning through Xiaomi
 
-To jest potwierdzona ścieżka dla factory-new S400 z auth v2. Token i bindkey
-nadal powstają lokalnie z ECDH.
-Do Xiaomi trafiają MAC, model, token i bindkey, tak jak w Mi Home; serwer zwraca
-DID, certyfikat oraz podpis `DID || bindkey || UTC`. Tekstowy DID jest dopełniany
-zerami z lewej strony do 20 bajtów, dokładnie jak w Mi Home. Skrypt sprawdza
-podpis credentialu i certyfikat względem publicznego root key z SDK, wymaga
-`REGISTER_OK`, a następnie sprawdza token lokalnym loginem GATT.
+This is the confirmed path for a factory-new S400 with auth v2. The token and
+bindkey are still derived locally from ECDH. The MAC, model, token and bindkey
+are sent to Xiaomi, exactly as in Mi Home; the server returns the DID, a
+certificate and a signature over `DID || bindkey || UTC`. The textual DID is
+left-padded with zeros to 20 bytes, exactly as in Mi Home. The script verifies
+the credential signature and the certificate against the public root key from
+the SDK, requires `REGISTER_OK` and then verifies the token with a local GATT
+login.
 
-Na Windows z ASUS USB-BT400 uruchom narzędzie w zwykłym PowerShellu. Launcher
-otwiera dedykowany profil Edge na aktualnej stronie konta Xiaomi. Zakończ w nim
-logowanie oraz ewentualną weryfikację e-mail, a dopiero potem wróć do terminala.
-Przed wysłaniem żądania provisioner wymaga cookie `passToken`; niedokończone
-logowanie kończy się lokalnym błędem i nie generuje kolejnego kodu. Login i hasło
-są odczytywane interaktywnie; hasło, cookies i odpowiedzi API nie trafiają do
-argumentów, trace'u ani pliku wynikowego:
+On Windows with an ASUS USB-BT400, run the tool in a regular PowerShell. The
+launcher opens a dedicated Edge profile on the current Xiaomi account page.
+Finish the login and any e-mail verification there, and only then return to the
+terminal. Before sending the request the provisioner requires the `passToken`
+cookie; an unfinished login ends with a local error and does not generate
+another code. The login and password are read interactively; the password,
+cookies and API responses never end up in arguments, the trace or the result
+file:
 
 ```powershell
 $repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
 & "$repo\tools\windows\run_s400_xiaomi_pair.ps1" -Region de
 ```
 
-Region musi odpowiadać regionowi konta Mi Home. Dla konta używanego w Polsce
-typową wartością jest `de`; dostępne są też `cn`, `us`, `ru`, `tw`, `sg`, `in`
-i `i2`. Dedykowany profil znajduje się lokalnie w
-`%LOCALAPPDATA%\XiaomiS400Provisioner\EdgeProfile`, dzięki czemu cookies
-przetrwają ponowne uruchomienie po czasowym limicie Xiaomi. Skrypt nie ponawia
-automatycznie odrzuconej captchy.
+The region must match the region of the Mi Home account. For an account used in
+Poland the usual value is `de`; `cn`, `us`, `ru`, `tw`, `sg`, `in` and `i2` are
+also available. The dedicated profile is stored locally in
+`%LOCALAPPDATA%\XiaomiS400Provisioner\EdgeProfile`, so cookies survive a restart
+after a Xiaomi time limit. The script does not automatically retry a rejected
+captcha.
 
-Po sukcesie Xiaomi nie jest potrzebne do działania integracji. W Home Assistant
-wprowadź 32 znaki `bindkey` i 24 znaki `token` z pliku wynikowego. Narzędzie nie
-pobiera istniejących kluczy z konta i nie wylicza pomiarów w chmurze.
+After a success, Xiaomi is no longer needed for the integration to work. In Home
+Assistant enter the 32 `bindkey` characters and the 24 `token` characters from
+the result file. The tool does not fetch existing keys from the account and does
+not compute measurements in the cloud.
 
-## Test lokalnego odbioru
+A hardware test on 2026-09-21 confirmed the DMTU 242 negotiation, the
+multi-frame certificate transfer, the local verification of both signatures, the
+`11000000` (`REGISTER_OK`) response and the later `21000000` (`LOGIN_OK`)
+response.
 
-Na Windows z adapterem ASUS USB-BT400 można sprawdzić zapisane klucze bez
-uruchamiania Home Assistanta ani logowania do Xiaomi:
-
-```powershell
-$repo = "\\wsl.localhost\Ubuntu\home\kbpk\xiaomi\xiaomi-s400-homeassistant"
-uv run --no-project --with-requirements "$repo\requirements-lab.txt" `
-  "$repo\tools\s400_verify_local.py" `
-  --secrets "$repo\private\s400-secrets.json" --duration 60
-```
-
-Wybudź wagę podczas skanowania, a po komunikacie `Local token login: OK` stań
-na niej do końca pomiaru. Skrypt wypisuje tylko zdekodowane FE95/GATT i liczbę
-odebranych pomiarów; nie wypisuje bindkeya, tokenu ani surowych ramek. Zmień
-ścieżkę dystrybucji WSL, jeśli `wsl -l -v` pokazuje inną nazwę niż `Ubuntu`.
-
-Jeśli HA widzi wagę, lecz nie aktualizuje encji, upewnij się, że adapter
-Bluetooth jest dostępny dla hosta HA, MAC zgadza się z plikiem sekretów i
-pomiar został zakończony. `invalid authentication tag` w diagnostyce wskazuje
-na błędny bindkey lub adres; `PairingError` po połączeniu GATT może oznaczać
-nieaktualny token. Po resecie fabrycznym klucze przestają pasować i konieczne
-jest ponowne pierwsze parowanie.
-
-Test sprzętowy z 2026-09-21 potwierdził negocjację DMTU 242, transfer
-wieloramkowego certyfikatu, lokalną weryfikację obu podpisów, odpowiedź
-`11000000` (`REGISTER_OK`) i późniejszą odpowiedź `21000000` (`LOGIN_OK`).
-
-Szczegóły protokołu, stan dowodów i workflow capture znajdują się w
-[`research/PROTOCOL.md`](research/PROTOCOL.md) oraz
+Details of the protocol, the state of evidence and the capture workflow are in
+[`research/PROTOCOL.md`](research/PROTOCOL.md) and
 [`research/CAPTURE.md`](research/CAPTURE.md).
 
-## Rozwój
+## Supported devices
+
+| Model | Marketing name | Notes |
+|---|---|---|
+| `MJTZC01YM` | Xiaomi Body Composition Scale S400 (`yunmai.scales.ms103` / `ms104` / `ms107`) | Weight, heart rate, dual-frequency impedance, profile id. Broadcasts encrypted MiBeacon v4/v5 and needs a bindkey. |
+
+The parser recognises the product ids `0x30D9`, `0x3BD5` and `0x48CF`. The scale
+is a "sleepy" device: it only advertises around a weigh-in.
+
+## Supported functionality
+
+One device with these entities:
+
+- `sensor.weight` — last stabilised weight (kg)
+- `sensor.heart_rate` — heart rate (bpm), when measured barefoot
+- `sensor.impedance_50_khz` — low-frequency impedance (Ω)
+- `sensor.impedance_250_khz` — high-frequency impedance (Ω)
+- `sensor.profile_id` — scale user slot the reading was assigned to
+- `sensor.signal_strength` — RSSI (diagnostic, disabled by default)
+- `binary_sensor.measurement_stabilized` — measurement cycle finished
+
+Body-composition metrics (BMI, body fat, muscle, water, …) are not computed
+here. Feed weight and both impedances into
+[`bodymiscale`](https://github.com/dckiller51/bodymiscale) (dual-frequency S400
+mode) for that.
+
+## How data is updated
+
+The integration is push-based (`iot_class: local_push`). It listens for the
+scale's encrypted MiBeacon advertisements and updates the entities as frames
+arrive. A barefoot weigh-in produces two measurement frames (weight + 50 kHz
+impedance + heart rate, then 250 kHz impedance). If a 12-byte login token is
+configured, an authenticated GATT session is also consumed for live and final
+measurements. Values are restored after a Home Assistant restart. There is no
+polling and no cloud connection.
+
+## Use cases
+
+- Track a weight/composition trend with long-term statistics, independent of the
+  Xiaomi Cloud.
+- Automate on a finished measurement, for example:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.xiaomi_s400_measurement_stabilized
+    to: "on"
+actions:
+  - action: notify.mobile_app_phone
+    data:
+      message: >-
+        {{ states('sensor.xiaomi_s400_weight') }} kg
+```
+
+## Configuration parameters
+
+- **Bluetooth address** — the scale's six-byte address.
+- **Bindkey** (16 bytes / 32 hex) — decrypts the advertisements. Required.
+- **Login token** (12 bytes / 24 hex) — optional; only for the active GATT stream.
+
+Both credentials can be updated later through **Reconfigure** on the config entry.
+
+## Removal
+
+1. **Settings → Devices & services → Xiaomi S400 Local → Delete** to remove the
+   config entry (this stops the Bluetooth listener).
+2. Optionally delete the `custom_components/xiaomi_s400_local` folder (or remove
+   it through HACS) and restart Home Assistant.
+3. Historical statistics remain in the recorder after removal; purge them with
+   `recorder.purge_entities` if desired.
+
+## Troubleshooting
+
+- **No entities / only signal strength** — the scale has not been paired in the
+  Xiaomi Home app yet, so it never minted a bindkey. Pair it once, extract the
+  bindkey, then add the integration.
+- **No data while the phone app is open** — the app holds the GATT connection
+  and the scale stops broadcasting. Close the app (or its Bluetooth) while
+  weighing.
+- **`invalid_address` / `invalid_key`** — check the six-byte MAC and that the
+  bindkey is 32 hex characters, the token 24.
+- **Weak/flickering signal** — the S400 is sleepy and low power. Move a
+  Bluetooth proxy closer, or prefer a local adapter over a distant proxy.
+- **`registration_unsupported`** — the scale reports auth version 2, for which a
+  fully local first pairing is not possible (it needs a one-time Xiaomi-signed
+  credential). Use **Existing keys** with a bindkey from the token extractor.
+
+## Known limitations
+
+- The bindkey must be extracted once from the Xiaomi Cloud
+  ([Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor));
+  the email/password re-auth inside Home Assistant is unreliable for the S400.
+- Body-composition metrics are not computed locally; use `bodymiscale`.
+- Auth version 2 first-bind cannot be done fully offline (see Troubleshooting).
+- The optional active GATT stream needs a connectable adapter/proxy and a valid
+  token; it is not required for weight, heart rate or impedance, which all
+  arrive passively.
+
+## Development
 
 ```bash
 uv sync --dev
@@ -226,6 +333,6 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-Trace BLE i pliki sekretów są ignorowane przez Git. Zasady zgłaszania wyników
-oraz bezpiecznego przygotowania capture opisuje
+BLE traces and secret files are ignored by Git. The rules for reporting results
+and for safely preparing captures are described in
 [`CONTRIBUTING.md`](CONTRIBUTING.md).

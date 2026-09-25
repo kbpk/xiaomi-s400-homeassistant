@@ -111,7 +111,7 @@ class S400ConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_bluetooth(self, discovery_info) -> ConfigFlowResult:
+    async def async_step_bluetooth(self, discovery_info: Any) -> ConfigFlowResult:
         pid = product_id_from_service_data(
             discovery_info.service_data.get(MIBEACON_UUID)
         )
@@ -155,8 +155,12 @@ class S400ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_BINDKEY): str,
-                    vol.Optional(CONF_TOKEN): str,
+                    vol.Required(
+                        CONF_BINDKEY, default=entry.data.get(CONF_BINDKEY, "")
+                    ): str,
+                    vol.Optional(
+                        CONF_TOKEN, default=entry.data.get(CONF_TOKEN, "")
+                    ): str,
                 }
             ),
             errors=errors,

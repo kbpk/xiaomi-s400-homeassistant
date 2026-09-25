@@ -3,17 +3,32 @@ name = "xiaomi-s400-homeassistant"
 version = "0.3.0"
 description = "Fully local Xiaomi S400 BLE integration for Home Assistant"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.2"
 license = { file = "LICENSE" }
 dependencies = [
-  "bleak>=0.22,<2",
   "cryptography>=41",
 ]
 
 [dependency-groups]
 dev = [
   "pytest>=8.3,<10",
+  "pytest-homeassistant-custom-component==0.13.366",
+  "pytest-cov>=6,<8",
   "ruff>=0.12,<1",
+  # Pin the Bluetooth stack to the versions Home Assistant 2026.9.3 requires.
+  # Custom integrations declare no requirements; the test env has to provide them.
+  "bleak==3.0.2",
+  "bleak-retry-connector==4.7.0",
+  "bluetooth-adapters==2.4.0",
+  "bluetooth-auto-recovery==1.6.4",
+  "bluetooth-data-tools==1.29.24",
+  "dbus-fast==5.0.22",
+  "habluetooth==6.26.11",
+  "aiousbwatcher==1.1.2",
+  "serialx==1.10.0",
+  "fnv-hash-fast==2.0.3",
+  "psutil-home-assistant==0.0.1",
+  "mypy>=1.11,<2",
 ]
 
 [tool.uv]
@@ -21,6 +36,9 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+addopts = "--cov=custom_components/xiaomi_s400_local --cov-report=term-missing"
 
 [tool.ruff]
 target-version = "py312"
@@ -28,3 +46,9 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "SIM", "UP"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unused_configs = true
+files = ["custom_components/xiaomi_s400_local"]

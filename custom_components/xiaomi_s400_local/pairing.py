@@ -15,7 +15,7 @@ import string
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, Protocol
 
 from bleak import BleakClient, BleakScanner
 
@@ -103,7 +103,7 @@ class TraceRecorder:
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path else None
         self._started = time.monotonic()
-        self._handle = None
+        self._handle: IO[str] | None = None
 
     def __enter__(self) -> TraceRecorder:
         if self.path:
@@ -137,10 +137,14 @@ class TraceRecorder:
         self._handle.flush()
 
 
+class Trace(Protocol):
+    """Anything that can record structured protocol events."""
+
+    def record(self, event: str, **values: Any) -> None: ...
+
+
 class _GattTransport:
-    def __init__(
-        self, client: BleakClient, trace: TraceRecorder, timeout: float
-    ) -> None:
+    def __init__(self, client: BleakClient, trace: Trace, timeout: float) -> None:
         self.client = client
         self.trace = trace
         self.timeout = timeout

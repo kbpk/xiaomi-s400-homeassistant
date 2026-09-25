@@ -1,5 +1,5 @@
 {
-  "title": "Xiaomi S400 lokalnie",
+  "title": "Xiaomi S400 Local",
   "config": {
     "abort": {
       "already_configured": "Ta waga jest już skonfigurowana.",
@@ -15,27 +15,38 @@
         "description": "Wybierz wagę i wprowadź jej istniejące lokalne klucze BLE.",
         "data": {
           "address": "Adres Bluetooth"
+        },
+        "data_description": {
+          "address": "Sześciobajtowy adres Bluetooth wagi, oferowany na liście."
         }
       },
       "keys": {
-        "title": "Istniejące klucze lokalne",
-        "description": "Wprowadź 16-bajtowy bindkey uzyskany podczas pierwszego parowania. Opcjonalny 12-bajtowy token umożliwia automatyczny lokalny login GATT i pomiary na żywo.",
+        "title": "Użyj istniejących lokalnych poświadczeń",
+        "description": "16-bajtowy bindkey umożliwia odbiór reklam pasywnych. Dodaj 12-bajtowy token, aby Home Assistant łączył się po wybudzeniu wagi i odbierał automatycznie pomiary bieżące i końcowe przez GATT.",
         "data": {
           "bindkey": "Bindkey (32 znaki hex)",
-          "token": "Token login (24 znaki hex, opcjonalny)"
+          "token": "Token logowania (24 znaki hex, opcjonalny)"
+        },
+        "data_description": {
+          "bindkey": "Wyodrębniony jednorazowo za pomocą Xiaomi Cloud Tokens Extractor. Odszyfrowuje reklamy wagi.",
+          "token": "Opcjonalny. Potrzebny tylko do aktywnego strumienia GATT. Pozostaw pusty dla trybu pasywnego."
+        }
+      },
+      "reconfigure": {
+        "title": "Zaktualizuj poświadczenia",
+        "description": "Zastąp zapisany bindkey i/lub token, na przykład po ponownym sparowaniu wagi w aplikacji Xiaomi Home.",
+        "data": {
+          "bindkey": "Bindkey (32 znaki hex)",
+          "token": "Token logowania (24 znaki hex, opcjonalny)"
+        },
+        "data_description": {
+          "bindkey": "Wyodrębniony jednorazowo za pomocą Xiaomi Cloud Tokens Extractor. Odszyfrowuje reklamy wagi.",
+          "token": "Opcjonalny. Potrzebny tylko do aktywnego strumienia GATT. Pozostaw pusty dla trybu pasywnego."
         }
       },
       "discovery_confirm": {
         "title": "Wykryto Xiaomi S400",
         "description": "Wprowadź istniejący bindkey wagi oraz opcjonalny token GATT. Ten krok nie resetuje ani nie paruje wagi."
-      },
-      "reconfigure": {
-        "title": "Zmień lokalne klucze",
-        "description": "Zastąp bindkey i token po ponownym sparowaniu wagi. Pusty token oznacza tylko pasywny odbiór BLE.",
-        "data": {
-          "bindkey": "Bindkey (32 znaki hex)",
-          "token": "Token login (24 znaki hex, opcjonalny)"
-        }
       }
     }
   },
@@ -69,6 +80,20 @@
       },
       "gatt_connected": {
         "name": "Połączono przez GATT"
+      }
+    }
+  },
+  "issues": {
+    "invalid_bindkey": {
+      "title": "Nieprawidłowe poświadczenia Xiaomi S400",
+      "description": "Reklamy z {address} nie dają się już odszyfrować. Wyodrębnij bindkey ponownie i zaktualizuj integrację."
+    }
+  },
+  "fix_flow": {
+    "step": {
+      "confirm": {
+        "title": "Zaktualizuj poświadczenia Xiaomi S400",
+        "description": "Zatwierdź, a następnie użyj opcji Reconfigure w integracji, aby wpisać nowy bindkey i token."
       }
     }
   }

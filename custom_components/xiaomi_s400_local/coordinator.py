@@ -22,14 +22,18 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
 )
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 
 from .active import CmtpFrames, decode_cmtp
-from .const import MIBEACON_UUID
+from .const import DOMAIN, MIBEACON_UUID
 from .pairing import _GattTransport, _login
 from .parser import AdvertisementError, parse_mibeacon
 from .protocol import CMTP, RCV_OK, RCV_RDY
 
 _LOGGER = logging.getLogger(__name__)
+
+# Number of consecutive decoding failures before a repair issue is raised.
+_FAILURE_THRESHOLD = 5
 
 
 class S400Coordinator:
@@ -41,11 +45,13 @@ class S400Coordinator:
         address: str,
         bindkey: bytes,
         token: bytes | None = None,
+        entry_id: str | None = None,
     ) -> None:
         self.hass = hass
         self.address = address.upper()
         self.bindkey = bindkey
         self.token = token
+        self.entry_id = entry_id
         self.values: dict[str, Any] = {
             "weight": None,
             "heart_rate": None,
@@ -65,6 +71,7 @@ class S400Coordinator:
         self._active_task: Task[None] | None = None
         self._last_active_attempt = 0.0
         self.last_error: str | None = None
+        self._consecutive_failures = 0
 
     def start(self) -> None:
         """Register a passive Bluetooth callback."""
@@ -90,6 +97,54 @@ class S400Coordinator:
                 await self._active_task
             self._active_task = None
 
+    def _note_error(self, err: object) -> None:
+        """Record a failure and log the healthy -> failing transition once."""
+        message = str(err)
+        if self.last_error is None:
+            _LOGGER.warning(
+                "Xiaomi S400 %s is not reachable: %s", self.address, message
+            )
+        self.last_error = message
+
+    def _note_decryption_failure(self, err: AdvertisementError) -> None:
+        """Count only authenticated measurement frames with a bad tag."""
+        self._note_error(err)
+        self._consecutive_failures += 1
+        if self.entry_id and self._consecutive_failures == _FAILURE_THRESHOLD:
+            self._create_repair_issue()
+
+    def _clear_error(self) -> None:
+        """Clear a recorded failure and log the failing -> healthy transition once."""
+        if self.last_error is not None:
+            _LOGGER.info("Xiaomi S400 %s is reachable again", self.address)
+        self.last_error = None
+
+    def _clear_decryption_failure(self) -> None:
+        """A decrypted object proves the stored bindkey still works."""
+        self._consecutive_failures = 0
+        self._delete_repair_issue()
+
+    def _issue_id(self) -> str:
+        """Return the repair issue id for this scale."""
+        return f"invalid_bindkey_{self.address.replace(':', '').lower()}"
+
+    def _create_repair_issue(self) -> None:
+        """Raise a repair issue when advertisements keep failing to decrypt."""
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._issue_id(),
+            is_fixable=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="invalid_bindkey",
+            translation_placeholders={"address": self.address},
+            data={"entry_id": self.entry_id},
+        )
+
+    def _delete_repair_issue(self) -> None:
+        if self.entry_id:
+            ir.async_delete_issue(self.hass, DOMAIN, self._issue_id())
+
     @callback
     def add_listener(self, listener: Callable[[], None]) -> CALLBACK_TYPE:
         self._listeners.add(listener)
@@ -111,10 +166,15 @@ class S400Coordinator:
         try:
             update = parse_mibeacon(self.address, raw, self.bindkey)
         except AdvertisementError as err:
-            self.last_error = str(err)
+            if str(err) == "MiBeacon authentication tag is invalid":
+                self._note_decryption_failure(err)
+            else:
+                self._note_error(err)
             _LOGGER.debug("Discarding S400 advertisement: %s", err)
             return
-        self.last_error = None
+        self._clear_error()
+        if update.encrypted and int.from_bytes(raw[:2], "little") & (1 << 6):
+            self._clear_decryption_failure()
         parsed = asdict(update)
         if parsed["weight"] is not None and parsed["stabilized"] is False:
             self._start_measurement()
@@ -192,7 +252,7 @@ class S400Coordinator:
             await transport.official_init()
             await transport.finish_subscriptions()
             keys = await _login(transport, self.token)
-            self.last_error = None
+            self._clear_error()
             self.values["gatt_connected"] = True
             self._notify_listeners()
             frames = CmtpFrames()
@@ -230,7 +290,7 @@ class S400Coordinator:
         except CancelledError:
             raise
         except Exception as err:
-            self.last_error = f"active GATT: {type(err).__name__}"
+            self._note_error(f"active GATT: {type(err).__name__}")
             _LOGGER.debug("S400 active session ended: %s", type(err).__name__)
             self._notify_listeners()
         finally:
@@ -265,7 +325,7 @@ class S400Coordinator:
                     measurement.timestamp, UTC
                 )
         self.values["last_seen"] = datetime.now(UTC)
-        self.last_error = None
+        self._clear_error()
         self._notify_listeners()
 
     @callback
