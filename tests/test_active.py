@@ -42,5 +42,5 @@ def test_parses_final_measurement() -> None:
     assert measurement.weight == 81.2
     assert measurement.profile_id == 3
     assert measurement.timestamp == 1700000000
-    assert measurement.impedance_low == 489.1
-    assert measurement.impedance_high == 511.2
+    assert measurement.impedance_low == 511.2
+    assert measurement.impedance_high == 489.1

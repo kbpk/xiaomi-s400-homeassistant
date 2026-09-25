@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.entity import Entity
 
+from . import S400ConfigEntry
 from .const import DOMAIN
 from .coordinator import S400Coordinator
 
@@ -16,7 +16,7 @@ class S400Entity(Entity):
     _attr_has_entity_name = True
 
     def __init__(
-        self, entry: ConfigEntry, coordinator: S400Coordinator, key: str
+        self, entry: S400ConfigEntry, coordinator: S400Coordinator, key: str
     ) -> None:
         self.coordinator = coordinator
         self._key = key

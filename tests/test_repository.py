@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,9 @@ def test_hacs_and_manifest_structure() -> None:
     assert manifest["version"]
     assert manifest["codeowners"]
     assert (INTEGRATION / "config_flow.py").is_file()
+    with (ROOT / "pyproject.toml").open("rb") as handle:
+        project = tomllib.load(handle)
+    assert manifest["version"] == project["project"]["version"]
 
 
 def test_translation_shapes_match_strings() -> None:

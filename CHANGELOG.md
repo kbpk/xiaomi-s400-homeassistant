@@ -6,6 +6,17 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-21
+
+- Make the Home Assistant setup flow accept existing local credentials only;
+  auth v2 initial provisioning still requires a Xiaomi-signed credential.
+- Add a reconfiguration flow for changed bindkeys and login tokens.
+- Keep the last measured value available when the sleeping scale disconnects,
+  clear stale composition fields at the start of a new weighing, and expose
+  the measurement timestamp and diagnostic GATT connection state.
+- Align GATT final-message impedance fields with the advertisement decoder.
+- Add an offline Windows/Linux hardware verification tool for FE95 and GATT.
+
 ## 0.2.1 - 2026-09-21
 
 - Add a one-time Xiaomi-assisted standard-auth v2 provisioner that derives

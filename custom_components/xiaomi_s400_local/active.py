@@ -88,8 +88,10 @@ def parse_cmtp_plaintext(plaintext: bytes) -> ActiveMeasurement | None:
         return None
 
     weight = integer(fields[3])
-    impedance_low = integer(fields[-2])
-    impedance_high = integer(fields[-1])
+    # The last CSV field matches the larger value seen in the weight-bearing
+    # MiBeacon frame (50 kHz); the preceding field matches the secondary frame.
+    impedance_high = integer(fields[-2])
+    impedance_low = integer(fields[-1])
     return ActiveMeasurement(
         weight=weight / 10 if weight is not None else None,
         stabilized=fields[4] == "1",

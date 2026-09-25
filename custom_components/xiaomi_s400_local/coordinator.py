@@ -13,6 +13,7 @@ from typing import Any
 
 from bleak import BleakClient
 from bleak_retry_connector import establish_connection
+from cryptography.exceptions import InvalidTag
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     BluetoothCallbackMatcher,
@@ -58,6 +59,8 @@ class S400Coordinator:
             "impedance_high": None,
             "profile_id": None,
             "stabilized": False,
+            "measurement_time": None,
+            "gatt_connected": False,
             "rssi": None,
             "last_seen": None,
             "product_id": None,
@@ -76,7 +79,9 @@ class S400Coordinator:
             self.hass,
             self._advertisement,
             BluetoothCallbackMatcher(
-                address=self.address, service_data_uuid=MIBEACON_UUID
+                address=self.address,
+                service_data_uuid=MIBEACON_UUID,
+                connectable=False,
             ),
             BluetoothScanningMode.PASSIVE,
         )
@@ -100,8 +105,12 @@ class S400Coordinator:
                 "Xiaomi S400 %s is not reachable: %s", self.address, message
             )
         self.last_error = message
+
+    def _note_decryption_failure(self, err: AdvertisementError) -> None:
+        """Count only authenticated measurement frames with a bad tag."""
+        self._note_error(err)
         self._consecutive_failures += 1
-        if self.entry_id and self._consecutive_failures >= _FAILURE_THRESHOLD:
+        if self.entry_id and self._consecutive_failures == _FAILURE_THRESHOLD:
             self._create_repair_issue()
 
     def _clear_error(self) -> None:
@@ -109,6 +118,9 @@ class S400Coordinator:
         if self.last_error is not None:
             _LOGGER.info("Xiaomi S400 %s is reachable again", self.address)
         self.last_error = None
+
+    def _clear_decryption_failure(self) -> None:
+        """A decrypted object proves the stored bindkey still works."""
         self._consecutive_failures = 0
         self._delete_repair_issue()
 
@@ -147,18 +159,25 @@ class S400Coordinator:
     def _advertisement(
         self, service_info: BluetoothServiceInfoBleak, change: BluetoothChange
     ) -> None:
-        self._start_active_session()
         raw = service_info.service_data.get(MIBEACON_UUID)
         if raw is None:
             return
+        self._start_active_session()
         try:
             update = parse_mibeacon(self.address, raw, self.bindkey)
         except AdvertisementError as err:
-            self._note_error(err)
+            if str(err) == "MiBeacon authentication tag is invalid":
+                self._note_decryption_failure(err)
+            else:
+                self._note_error(err)
             _LOGGER.debug("Discarding S400 advertisement: %s", err)
             return
         self._clear_error()
+        if update.encrypted and int.from_bytes(raw[:2], "little") & (1 << 6):
+            self._clear_decryption_failure()
         parsed = asdict(update)
+        if parsed["weight"] is not None and parsed["stabilized"] is False:
+            self._start_measurement()
         for key in (
             "weight",
             "heart_rate",
@@ -169,14 +188,37 @@ class S400Coordinator:
         ):
             if parsed[key] is not None:
                 self.values[key] = parsed[key]
+        if (
+            update.stabilized
+            and update.timestamp is not None
+            and update.timestamp >= 1_577_836_800
+        ):
+            with suppress(OverflowError, OSError, ValueError):
+                self.values["measurement_time"] = datetime.fromtimestamp(
+                    update.timestamp, UTC
+                )
         self.values.update(
             rssi=service_info.rssi,
             last_seen=datetime.now(UTC),
             product_id=f"0x{update.product_id:04X}",
             mibeacon_version=update.frame_version,
         )
-        for listener in tuple(self._listeners):
-            listener()
+        self._notify_listeners()
+
+    @callback
+    def _start_measurement(self) -> None:
+        """Clear fields from the previous stable reading when weighing restarts."""
+        if not self.values["stabilized"]:
+            return
+        for key in (
+            "heart_rate",
+            "impedance_low",
+            "impedance_high",
+            "profile_id",
+            "measurement_time",
+        ):
+            self.values[key] = None
+        self.values["stabilized"] = False
 
     @callback
     def _start_active_session(self) -> None:
@@ -211,6 +253,8 @@ class S400Coordinator:
             await transport.finish_subscriptions()
             keys = await _login(transport, self.token)
             self._clear_error()
+            self.values["gatt_connected"] = True
+            self._notify_listeners()
             frames = CmtpFrames()
             queue = transport.queues[CMTP]
             while client.is_connected:
@@ -219,31 +263,52 @@ class S400Coordinator:
                 except TimeoutError:
                     continue
                 if len(data) >= 6 and data[:3] == b"\x00\x00\x00":
-                    frames.start(data)
+                    try:
+                        frames.start(data)
+                    except ValueError:
+                        frames = CmtpFrames()
+                        continue
                     await transport.write(CMTP, RCV_RDY)
                     continue
                 if not frames.expected:
                     continue
-                complete = frames.add(data)
+                try:
+                    complete = frames.add(data)
+                except ValueError:
+                    frames = CmtpFrames()
+                    continue
                 if complete is None:
                     continue
                 await transport.write(CMTP, RCV_OK)
-                measurement = decode_cmtp(keys, complete)
+                try:
+                    measurement = decode_cmtp(keys, complete)
+                except (InvalidTag, ValueError):
+                    _LOGGER.debug("Discarding unauthenticated S400 CMTP frame")
+                    continue
                 if measurement is not None:
                     self._apply_active_measurement(measurement)
         except CancelledError:
             raise
         except Exception as err:
-            self._note_error(f"active GATT: {type(err).__name__}: {err}")
-            _LOGGER.debug("S400 active session ended: %s", err)
+            self._note_error(f"active GATT: {type(err).__name__}")
+            _LOGGER.debug("S400 active session ended: %s", type(err).__name__)
             self._notify_listeners()
         finally:
+            self.values["gatt_connected"] = False
+            self._notify_listeners()
             if client and client.is_connected:
                 with suppress(Exception):
                     await client.disconnect()
 
     @callback
     def _apply_active_measurement(self, measurement: Any) -> None:
+        if measurement.timestamp is not None and self.values["measurement_time"]:
+            previous = self.values["measurement_time"].timestamp()
+            if abs(measurement.timestamp - previous) > 15:
+                self.values["stabilized"] = True
+                self._start_measurement()
+        if measurement.weight is not None and not measurement.stabilized:
+            self._start_measurement()
         for key in (
             "weight",
             "impedance_low",
@@ -254,6 +319,11 @@ class S400Coordinator:
             if value is not None:
                 self.values[key] = value
         self.values["stabilized"] = measurement.stabilized
+        if measurement.timestamp is not None:
+            with suppress(OverflowError, OSError, ValueError):
+                self.values["measurement_time"] = datetime.fromtimestamp(
+                    measurement.timestamp, UTC
+                )
         self.values["last_seen"] = datetime.now(UTC)
         self._clear_error()
         self._notify_listeners()

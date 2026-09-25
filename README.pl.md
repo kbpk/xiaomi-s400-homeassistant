@@ -11,7 +11,8 @@ laboratoryjne może jednorazowo poprosić backend Xiaomi o podpis wymagany przez
 factory-new S400 z auth version 2.
 
 > [!WARNING]
-> Projekt jest w fazie alpha. Provisioning auth v2 został potwierdzony na S400
+> Odbiór pomiarów w Home Assistant nadal wymaga dalszych testów sprzętowych.
+> Provisioning auth v2 został potwierdzony na S400
 > z firmware `2.1.1_0006`: waga zwróciła `REGISTER_OK`, a następnie zaakceptowała
 > lokalny login tokenem. Pierwszy bind wymaga jednorazowego podpisania credentialu
 > przez Xiaomi; po nim odbiór danych i loginy GATT są lokalne. Czysto lokalny
@@ -49,13 +50,16 @@ więc nie zapisze losowych, nieuzgodnionych kluczy.
 2. Pobierz **Xiaomi S400 Local** i uruchom ponownie Home Assistant.
 3. Wybudź wagę i wybierz
    **Ustawienia → Urządzenia i usługi → Dodaj integrację → Xiaomi S400 Local**.
-4. Jeżeli masz już bindkey i token, wybierz `Existing keys`. Token uruchamia
-   automatyczny aktywny odbiór GATT; bez niego pozostaje odbiór reklam FE95.
+4. Wprowadź 16-bajtowy bindkey i opcjonalnie 12-bajtowy token. Token włącza
+   aktywny odbiór GATT; bez niego pozostaje odbiór reklam FE95.
 
-Opcja `Local provisioning` jest obecnie przeznaczona do eksperymentów i zapisze
-klucze tylko wtedy, gdy waga potwierdzi rejestrację oraz późniejszy login. Do
-pasywnych reklam token nie jest potrzebny. Automatyczny aktywny strumień GATT
-wymaga tokenu.
+Konfiguracja HA nie paruje ani nie resetuje wagi. Po zmianie kluczy użyj
+**Reconfigure**. Klucze są przechowywane w danych wpisu konfiguracyjnego HA,
+dlatego chroń katalog `.storage` i kopie zapasowe.
+
+Oznaczenia impedancji 50 i 250 kHz są wnioskowane z kolejności i wartości ramek;
+częstotliwości elektrod nie zmierzono bezpośrednio. Nowy pomiar czyści tętno i
+impedancję poprzedniej osoby.
 
 Instalacja ręczna polega na skopiowaniu katalogu
 `custom_components/xiaomi_s400_local` do katalogu `custom_components`
@@ -70,7 +74,7 @@ trzeba go odczytać z konta Xiaomi:
 
 1. Dodaj wagę w aplikacji **Xiaomi Home** i zważ się raz. To tworzy bindkey.
 2. Uruchom [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor)
-   (`python token_extractor.py`). Zaloguj się kontem Xiaomi: obsługiwane są
+   (`uv run python token_extractor.py`). Zaloguj się kontem Xiaomi: obsługiwane są
    logowanie QR, e-mail/hasło, 2FA oraz captcha, więc 2FA nie jest przeszkodą.
    Wybierz region (np. `de` dla Europy).
 3. Znajdź S400 na liście i skopiuj:
@@ -105,14 +109,13 @@ względem danych rejestracji. Nie ujawnia surowych ramek ani kluczy.
 Na Raspberry Pi OS lub Debianie:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-lab.txt
-.venv/bin/python tools/s400_diag.py --duration 60 --output captures/s400-gatt.jsonl
+uv run --no-project --with-requirements requirements-lab.txt \
+  tools/s400_diag.py --duration 60 --output captures/s400-gatt.jsonl
 ```
 
 Bleak korzysta z usługi D-Bus BlueZ. Na typowym Raspberry Pi OS wystarcza
 użytkownik mający dostęp do Bluetooth; jeżeli lokalna polityka D-Bus odrzuci
-połączenie, uruchom pojedyncze narzędzie przez `sudo .venv/bin/python ...`.
+połączenie, uruchom pojedyncze narzędzie przez `sudo uv run ...`.
 
 Skrypt wykrywa PID S400, wypisuje pełną bazę GATT, subskrybuje wszystkie
 charakterystyki `notify`/`indicate` i zapisuje reklamy oraz powiadomienia do
@@ -143,7 +146,8 @@ Badana S400 zgłasza version 2 i otrzyma komunikat o braku obsługi.
 Po factory resecie i wybudzeniu wagi:
 
 ```bash
-.venv/bin/python tools/s400_pair.py \
+uv run --no-project --with-requirements requirements-lab.txt \
+  tools/s400_pair.py \
   --output private/s400-secrets.json \
   --trace captures/s400-pair.jsonl
 ```

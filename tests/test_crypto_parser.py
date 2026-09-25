@@ -70,6 +70,7 @@ def test_parse_encrypted_s400_object() -> None:
     value = parser.parse_mibeacon(address, service_data, bindkey)
     assert value.product_id == 0x30D9
     assert value.profile_id == 3
+    assert value.timestamp == 123
     assert value.weight == 73.6
     assert value.heart_rate == 101
     assert value.impedance_low == 510.6

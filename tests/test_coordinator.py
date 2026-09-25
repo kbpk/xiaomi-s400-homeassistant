@@ -138,7 +138,7 @@ async def test_active_session_connection_error_sets_last_error(
     ):
         await coordinator._active_session()
     assert coordinator.last_error is not None
-    assert "boom" in coordinator.last_error
+    assert coordinator.last_error == "active GATT: RuntimeError"
 
 
 async def test_apply_active_measurement_and_stop(hass: HomeAssistant) -> None:
@@ -269,6 +269,46 @@ async def test_repeated_failures_raise_and_clear_repair_issue(
 
     coordinator._advertisement(_service_info(_frame(mass=500, hr=0, imp=0)), None)
     assert key not in ir.async_get(hass).issues
+
+
+async def test_new_weighing_clears_previous_persons_metrics(
+    hass: HomeAssistant,
+) -> None:
+    coordinator = _coordinator(hass)
+    coordinator._advertisement(_service_info(_frame(mass=500, hr=0, imp=0)), None)
+    coordinator.values["heart_rate"] = 82
+    coordinator.values["impedance_high"] = 470.0
+    assert coordinator.values["stabilized"] is True
+
+    coordinator._advertisement(_service_info(bytes.fromhex("0051d9302a")), None)
+    assert coordinator.values["stabilized"] is True
+
+    coordinator._advertisement(_service_info(_frame(mass=600, hr=0, imp=5000)), None)
+    assert coordinator.values["weight"] == 60.0
+    assert coordinator.values["stabilized"] is False
+    assert coordinator.values["heart_rate"] is None
+    assert coordinator.values["impedance_high"] is None
+
+
+async def test_only_authentication_failures_raise_bindkey_repair(
+    hass: HomeAssistant,
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    coordinator = _coordinator(hass)
+    coordinator.entry_id = "01TESTENTRY"
+    key = (DOMAIN, coordinator._issue_id())
+    for _ in range(6):
+        coordinator._advertisement(_service_info(bytes.fromhex("005100002a")), None)
+    coordinator._note_error("active GATT: TimeoutError")
+    assert key not in ir.async_get(hass).issues
+
+    bad = bytes.fromhex("5858d9302a") + _EMBEDDED_MAC + bytes(15)
+    for _ in range(5):
+        coordinator._advertisement(_service_info(bad), None)
+    assert key in ir.async_get(hass).issues
+    coordinator._advertisement(_service_info(bytes.fromhex("0051d9302a")), None)
+    assert key in ir.async_get(hass).issues
 
 
 @pytest.mark.parametrize("token", [None, bytes(12)])

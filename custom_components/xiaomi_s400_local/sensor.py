@@ -63,6 +63,12 @@ SENSORS = (
         translation_key="profile_id",
     ),
     S400SensorDescription(
+        key="measurement_time",
+        translation_key="measurement_time",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    S400SensorDescription(
         key="rssi",
         translation_key="signal_strength",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,

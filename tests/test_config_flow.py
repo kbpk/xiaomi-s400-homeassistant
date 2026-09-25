@@ -1,359 +1,128 @@
-"""Tests for the config and reconfigure flows."""
+"""Keep the HA setup flow limited to supported local credential import."""
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import asyncio
+import sys
+from importlib import import_module
+from types import ModuleType, SimpleNamespace
 
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-from custom_components.xiaomi_s400_local.const import (
-    DOMAIN,
-    SETUP_KEYS,
-    SETUP_LOCAL,
-)
-
-ADDRESS = "04:AE:47:5C:FC:29"
+import pytest
+from test_crypto_parser import PACKAGE
 
 
-async def test_user_existing_keys_creates_entry(hass: HomeAssistant) -> None:
-    with patch(
-        "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-        return_value=[],
+@pytest.fixture
+def flow_module(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    ha = ModuleType("homeassistant")
+    components = ModuleType("homeassistant.components")
+    bluetooth = ModuleType("homeassistant.components.bluetooth")
+    entries = ModuleType("homeassistant.config_entries")
+    constants = ModuleType("homeassistant.const")
+    core = ModuleType("homeassistant.core")
+    vol = ModuleType("voluptuous")
+
+    class ConfigFlow:
+        def __init_subclass__(cls, **kwargs):
+            return super().__init_subclass__()
+
+        async def async_set_unique_id(self, unique_id):
+            self._unique_id = unique_id
+
+        def _abort_if_unique_id_configured(self):
+            pass
+
+        def _abort_if_unique_id_mismatch(self):
+            assert self._unique_id == self._entry.unique_id
+
+        def _get_reconfigure_entry(self):
+            return self._entry
+
+        def async_show_form(self, **kwargs):
+            return {"type": "form", **kwargs}
+
+        def async_create_entry(self, **kwargs):
+            return {"type": "create_entry", **kwargs}
+
+        def async_update_reload_and_abort(self, entry, **kwargs):
+            return {"type": "reconfigure", "entry": entry, **kwargs}
+
+        def async_abort(self, **kwargs):
+            return {"type": "abort", **kwargs}
+
+        def _set_confirm_only(self):
+            pass
+
+    class Marker:
+        def __init__(self, name, **kwargs):
+            self.name = name
+
+        def __hash__(self):
+            return hash(self.name)
+
+    class Schema:
+        def __init__(self, schema):
+            self.schema = schema
+
+    bluetooth.async_discovered_service_info = lambda hass, connectable: []
+    components.bluetooth = bluetooth
+    ha.components = components
+    entries.ConfigFlow = ConfigFlow
+    entries.ConfigFlowResult = dict
+    constants.CONF_ADDRESS = "address"
+    core.HomeAssistant = object
+    vol.Required = Marker
+    vol.Optional = Marker
+    vol.Schema = Schema
+    for name, module in (
+        ("homeassistant", ha),
+        ("homeassistant.components", components),
+        ("homeassistant.components.bluetooth", bluetooth),
+        ("homeassistant.config_entries", entries),
+        ("homeassistant.const", constants),
+        ("homeassistant.core", core),
+        ("voluptuous", vol),
     ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        assert result["type"] == FlowResultType.FORM
-        assert result["step_id"] == "user"
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"address": ADDRESS, "setup_method": SETUP_KEYS},
-        )
-        assert result["type"] == FlowResultType.FORM
-        assert result["step_id"] == "keys"
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"bindkey": "aa" * 16, "token": "bb" * 12},
-        )
-        assert result["type"] == FlowResultType.CREATE_ENTRY
-        assert result["data"]["bindkey"] == "aa" * 16
-        assert result["data"]["token"] == "bb" * 12
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setitem(sys.modules, PACKAGE.__name__, PACKAGE)
+    sys.modules.pop("s400_test_core.config_flow", None)
+    yield import_module("s400_test_core.config_flow")
+    sys.modules.pop("s400_test_core.config_flow", None)
 
 
-async def test_user_invalid_key_shows_error(hass: HomeAssistant) -> None:
-    with patch(
-        "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-        return_value=[],
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"address": ADDRESS, "setup_method": SETUP_KEYS},
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"bindkey": "nothex", "token": ""},
-        )
-        assert result["type"] == FlowResultType.FORM
-        assert result["errors"] == {"base": "invalid_key"}
+def test_user_setup_only_imports_existing_keys(flow_module: ModuleType) -> None:
+    flow = flow_module.S400ConfigFlow()
+    flow.hass = object()
+    initial = asyncio.run(flow.async_step_user())
+    assert initial["step_id"] == "user"
+    assert [field.name for field in initial["data_schema"].schema] == ["address"]
 
-
-async def test_user_invalid_address_shows_error(hass: HomeAssistant) -> None:
-    with patch(
-        "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-        return_value=[],
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"address": "zz", "setup_method": SETUP_KEYS},
-        )
-        assert result["type"] == FlowResultType.FORM
-        assert result["errors"] == {"address": "invalid_address"}
-
-
-async def test_duplicate_entry_aborts(hass: HomeAssistant) -> None:
-    entry = MockConfigEntry(domain=DOMAIN, unique_id=ADDRESS, data={})
-    entry.add_to_hass(hass)
-
-    with patch(
-        "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-        return_value=[],
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"address": ADDRESS, "setup_method": SETUP_KEYS},
-        )
-        assert result["type"] == FlowResultType.ABORT
-        assert result["reason"] == "already_configured"
-
-
-async def test_local_pairing_no_device(hass: HomeAssistant) -> None:
-    with (
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-            return_value=[],
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_ble_device_from_address",
-            return_value=None,
-        ),
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"address": ADDRESS, "setup_method": SETUP_LOCAL},
-        )
-        assert result["type"] == FlowResultType.FORM
-        assert result["step_id"] == "pair"
-
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-        assert result["errors"] == {"base": "device_not_found"}
-
-
-async def test_local_pairing_success(hass: HomeAssistant) -> None:
-    from unittest.mock import AsyncMock
-
-    from custom_components.xiaomi_s400_local import pairing
-
-    result_pair = pairing.PairingResult(
-        mac=ADDRESS,
-        product_id="0x30D9",
-        did="blt.3.1abc",
-        did_hex="00" * 20,
-        bindkey="aa" * 16,
-        token="bb" * 12,
+    keys = asyncio.run(flow.async_step_user({"address": "aa-bb-cc-dd-ee-ff"}))
+    assert keys["step_id"] == "keys"
+    assert [field.name for field in keys["data_schema"].schema] == [
+        "bindkey",
+        "token",
+    ]
+    entry = asyncio.run(
+        flow.async_step_keys({"bindkey": "AA" * 16, "token": "BB" * 12})
     )
-    with (
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-            return_value=[],
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_ble_device_from_address",
-            return_value=object(),
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.pair_device",
-            new=AsyncMock(return_value=result_pair),
-        ),
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"address": ADDRESS, "setup_method": SETUP_LOCAL}
-        )
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-        assert result["type"] == FlowResultType.CREATE_ENTRY
-        assert result["data"]["bindkey"] == "aa" * 16
+    assert entry["data"] == {
+        "address": "AA:BB:CC:DD:EE:FF",
+        "bindkey": "aa" * 16,
+        "token": "bb" * 12,
+    }
 
 
-async def test_local_pairing_failure(hass: HomeAssistant) -> None:
-    from unittest.mock import AsyncMock
-
-    from custom_components.xiaomi_s400_local import pairing
-
-    with (
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-            return_value=[],
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_ble_device_from_address",
-            return_value=object(),
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.pair_device",
-            new=AsyncMock(side_effect=pairing.PairingError("nope")),
-        ),
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"address": ADDRESS, "setup_method": SETUP_LOCAL}
-        )
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-        assert result["errors"] == {"base": "pairing_failed"}
-
-
-async def test_discovery_confirm_step(hass: HomeAssistant) -> None:
-    from types import SimpleNamespace
-
-    from custom_components.xiaomi_s400_local.const import MIBEACON_UUID
-
-    info = SimpleNamespace(
-        address=ADDRESS,
-        name="Xiaomi Scale S400",
-        service_data={MIBEACON_UUID: bytes.fromhex("0000d930")},
+def test_reconfigure_reloads_existing_entry(flow_module: ModuleType) -> None:
+    flow = flow_module.S400ConfigFlow()
+    flow._entry = SimpleNamespace(
+        unique_id="AA:BB:CC:DD:EE:FF", data={"bindkey": "aa" * 16}
     )
-    with patch(
-        "custom_components.xiaomi_s400_local.config_flow.product_id_from_service_data",
-        return_value=0x30D9,
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "bluetooth"}, data=info
-        )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "discovery_confirm"
+    invalid = asyncio.run(flow.async_step_reconfigure({"bindkey": "wrong"}))
+    assert invalid["errors"] == {"base": "invalid_key"}
 
-
-async def test_discovery_unsupported(hass: HomeAssistant) -> None:
-    from types import SimpleNamespace
-
-    from custom_components.xiaomi_s400_local.const import MIBEACON_UUID
-
-    info = SimpleNamespace(
-        address=ADDRESS,
-        name="Something else",
-        service_data={MIBEACON_UUID: bytes.fromhex("0000ffff")},
+    result = asyncio.run(
+        flow.async_step_reconfigure({"bindkey": "00" * 16, "token": "11" * 12})
     )
-    with patch(
-        "custom_components.xiaomi_s400_local.config_flow.product_id_from_service_data",
-        return_value=0xFFFF,
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "bluetooth"}, data=info
-        )
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "not_supported"
-
-
-async def test_reconfigure_updates_credentials(hass: HomeAssistant) -> None:
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Xiaomi S400 FC:29",
-        unique_id=ADDRESS,
-        data={"address": ADDRESS, "bindkey": "00" * 16, "token": ""},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": "reconfigure", "entry_id": entry.entry_id},
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "reconfigure"
-
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {"bindkey": "cc" * 16, "token": "dd" * 12},
-    )
-    assert result["type"] == FlowResultType.ABORT
-    assert entry.data["bindkey"] == "cc" * 16
-    assert entry.data["token"] == "dd" * 12
-
-
-async def test_discovered_choices_and_product_id(hass: HomeAssistant) -> None:
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-
-    from custom_components.xiaomi_s400_local import pairing
-    from custom_components.xiaomi_s400_local.const import MIBEACON_UUID
-
-    info = SimpleNamespace(
-        address=ADDRESS,
-        name="Xiaomi Scale S400",
-        service_data={MIBEACON_UUID: bytes.fromhex("0000d930")},
-    )
-    with patch(
-        "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-        return_value=[info],
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        assert result["type"] == FlowResultType.FORM
-
-    result_pair = pairing.PairingResult(
-        mac=ADDRESS,
-        product_id="0x30D9",
-        did="blt.3.1abc",
-        did_hex="00" * 20,
-        bindkey="aa" * 16,
-        token="bb" * 12,
-    )
-    with (
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-            return_value=[info],
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_ble_device_from_address",
-            return_value=object(),
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.pair_device",
-            new=AsyncMock(return_value=result_pair),
-        ),
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"address": ADDRESS, "setup_method": SETUP_LOCAL}
-        )
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-        assert result["type"] == FlowResultType.CREATE_ENTRY
-
-
-async def test_reconfigure_invalid_key(hass: HomeAssistant) -> None:
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Xiaomi S400 FC:29",
-        unique_id=ADDRESS,
-        data={"address": ADDRESS, "bindkey": "00" * 16, "token": ""},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id}
-    )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"bindkey": "nope", "token": ""}
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"] == {"base": "invalid_key"}
-
-
-async def test_local_pairing_registration_unsupported(hass: HomeAssistant) -> None:
-    from unittest.mock import AsyncMock
-
-    from custom_components.xiaomi_s400_local import pairing
-
-    with (
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_discovered_service_info",
-            return_value=[],
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.bluetooth.async_ble_device_from_address",
-            return_value=object(),
-        ),
-        patch(
-            "custom_components.xiaomi_s400_local.config_flow.pair_device",
-            new=AsyncMock(side_effect=pairing.RegistrationUnsupported("v2")),
-        ),
-    ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"address": ADDRESS, "setup_method": SETUP_LOCAL}
-        )
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-        assert result["errors"] == {"base": "registration_unsupported"}
+    assert result["type"] == "reconfigure"
+    assert result["entry"] is flow._entry
+    assert result["data_updates"] == {"bindkey": "00" * 16, "token": "11" * 12}

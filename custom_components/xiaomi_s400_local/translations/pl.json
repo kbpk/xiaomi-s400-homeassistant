@@ -6,28 +6,19 @@
       "not_supported": "To urządzenie Bluetooth nie jest obsługiwaną wagą S400."
     },
     "error": {
-      "device_not_found": "Waga jest obecnie nieosiągalna. Obudź ją i spróbuj ponownie.",
       "invalid_address": "Podaj sześciobajtowy adres MAC Bluetooth.",
-      "invalid_key": "Bindkey musi mieć 32 znaki hex, a token – jeśli podany – 24 znaki hex.",
-      "pairing_failed": "Waga odrzuciła lokalne parowanie lub go nie ukończyła. Zresetuj i obudź wagę, a następnie spróbuj ponownie.",
-      "registration_unsupported": "Lokalne parowanie nie obsługuje jeszcze tej wersji protokołu. Kolejny reset nie pomoże. Jeśli masz już bindkey, wybierz Existing keys."
+      "invalid_key": "Bindkey musi mieć 32 znaki hex, a opcjonalny token 24 znaki hex."
     },
     "step": {
       "user": {
-        "title": "Skonfiguruj Xiaomi S400",
-        "description": "Wybierz wagę i w pełni lokalną metodę konfiguracji.",
+        "title": "Konfiguracja Xiaomi S400",
+        "description": "Wybierz wagę i wprowadź jej istniejące lokalne klucze BLE.",
         "data": {
-          "address": "Adres Bluetooth",
-          "setup_method": "Metoda konfiguracji"
+          "address": "Adres Bluetooth"
         },
         "data_description": {
-          "address": "Sześciobajtowy adres Bluetooth wagi, oferowany na liście.",
-          "setup_method": "Użyj Existing keys, jeśli waga jest już sparowana w aplikacji Xiaomi Home. Local provisioning jest tylko dla wagi po resecie fabrycznym."
+          "address": "Sześciobajtowy adres Bluetooth wagi, oferowany na liście."
         }
-      },
-      "pair": {
-        "title": "Parowanie lokalne",
-        "description": "Zresetuj fabrycznie i obudź wagę, trzymaj ją blisko adaptera Bluetooth Home Assistant, a następnie zatwierdź. Tworzy to nowe lokalne poświadczenia i zastępuje poprzednią własność Mi Home."
       },
       "keys": {
         "title": "Użyj istniejących lokalnych poświadczeń",
@@ -55,21 +46,41 @@
       },
       "discovery_confirm": {
         "title": "Wykryto Xiaomi S400",
-        "description": "Przejdź do lokalnego parowania. Zastępuje to poprzednią własność Mi Home."
+        "description": "Wprowadź istniejący bindkey wagi oraz opcjonalny token GATT. Ten krok nie resetuje ani nie paruje wagi."
       }
     }
   },
   "entity": {
     "sensor": {
-      "weight": {"name": "Waga"},
-      "heart_rate": {"name": "Tętno"},
-      "impedance_low": {"name": "Impedancja 50 kHz"},
-      "impedance_high": {"name": "Impedancja 250 kHz"},
-      "profile_id": {"name": "ID profilu"},
-      "signal_strength": {"name": "Siła sygnału"}
+      "weight": {
+        "name": "Masa"
+      },
+      "heart_rate": {
+        "name": "Tętno"
+      },
+      "impedance_low": {
+        "name": "Impedancja 50 kHz"
+      },
+      "impedance_high": {
+        "name": "Impedancja 250 kHz"
+      },
+      "profile_id": {
+        "name": "Identyfikator profilu"
+      },
+      "signal_strength": {
+        "name": "Siła sygnału"
+      },
+      "measurement_time": {
+        "name": "Czas pomiaru"
+      }
     },
     "binary_sensor": {
-      "stabilized": {"name": "Pomiar ustabilizowany"}
+      "stabilized": {
+        "name": "Pomiar ustabilizowany"
+      },
+      "gatt_connected": {
+        "name": "Połączono przez GATT"
+      }
     }
   },
   "issues": {

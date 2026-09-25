@@ -13,7 +13,8 @@ request a one-time signature from the Xiaomi backend, which a factory-new S400
 with auth version 2 requires.
 
 > [!WARNING]
-> The project is in alpha. Auth v2 provisioning was confirmed on an S400 with
+> Measurement reception in Home Assistant still needs further hardware testing.
+> Auth v2 provisioning was confirmed on an S400 with
 > firmware `2.1.1_0006`: the scale returned `REGISTER_OK` and then accepted a
 > local login with the token. The first bind requires a one-time credential
 > signature from Xiaomi; afterwards data reception and GATT logins are local.
@@ -52,14 +53,17 @@ and a successful login, so it will not store random, unagreed keys.
 2. Download **Xiaomi S400 Local** and restart Home Assistant.
 3. Wake the scale and choose
    **Settings → Devices & services → Add integration → Xiaomi S400 Local**.
-4. If you already have a bindkey and token, choose `Existing keys`. The token
-   enables automatic active GATT reception; without it, reception stays limited
-   to FE95 advertisements.
+4. Enter the 16-byte bindkey and, optionally, the 12-byte token. The token
+   enables active GATT reception; without it, reception uses FE95 advertisements.
 
-The `Local provisioning` option is currently experimental and only stores keys
-when the scale confirms registration and a subsequent login. The token is not
-needed for passive advertisements. The automatic active GATT stream requires the
-token.
+Home Assistant setup does not pair or reset the scale. Use **Reconfigure** if
+its keys change. Home Assistant stores the keys in the config entry, so protect
+its `.storage` directory and backups.
+
+The 50 and 250 kHz impedance labels are inferred from frame order and values;
+electrode frequencies have not been measured directly. Body composition
+percentages are not calculated from unverified formulas. A new weighing clears
+the previous person's heart rate and impedance values.
 
 Manual installation means copying the `custom_components/xiaomi_s400_local`
 directory into the `custom_components` directory of a Home Assistant instance
@@ -75,7 +79,7 @@ paired — so it has to be read from your Xiaomi account:
 1. Add the scale to the **Xiaomi Home** app and weigh yourself once. This mints
    the bindkey.
 2. Run the [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor)
-   (`python token_extractor.py`). Log in with the Xiaomi account: QR login,
+  (`uv run python token_extractor.py`). Log in with the Xiaomi account: QR login,
    e-mail/password, 2FA and captcha are supported interactively, so 2FA is not a
    blocker. Pick your region (e.g. `de` for Europe).
 3. Find the S400 in the output and copy:
@@ -112,14 +116,13 @@ or keys.
 On Raspberry Pi OS or Debian:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-lab.txt
-.venv/bin/python tools/s400_diag.py --duration 60 --output captures/s400-gatt.jsonl
+uv run --no-project --with-requirements requirements-lab.txt \
+  tools/s400_diag.py --duration 60 --output captures/s400-gatt.jsonl
 ```
 
 Bleak uses the D-Bus BlueZ service. On a typical Raspberry Pi OS a user with
 Bluetooth access is enough; if the local D-Bus policy rejects the connection,
-run the individual tool through `sudo .venv/bin/python ...`.
+run the individual tool through `sudo uv run ...`.
 
 The script detects the S400 PID, prints the full GATT database, subscribes to
 all `notify`/`indicate` characteristics and writes advertisements and
@@ -152,7 +155,8 @@ supported.
 After a factory reset and waking the scale:
 
 ```bash
-.venv/bin/python tools/s400_pair.py \
+uv run --no-project --with-requirements requirements-lab.txt \
+  tools/s400_pair.py \
   --output private/s400-secrets.json \
   --trace captures/s400-pair.jsonl
 ```

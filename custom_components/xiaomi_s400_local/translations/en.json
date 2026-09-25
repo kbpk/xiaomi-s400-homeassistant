@@ -6,28 +6,19 @@
       "not_supported": "This Bluetooth device is not a supported S400."
     },
     "error": {
-      "device_not_found": "The scale is not currently reachable. Wake it and retry.",
       "invalid_address": "Enter a six-byte Bluetooth MAC address.",
-      "invalid_key": "Bindkey must be 32 hex characters and token, when supplied, 24 hex characters.",
-      "pairing_failed": "The scale rejected or did not complete local provisioning. Reset and wake it, then retry.",
-      "registration_unsupported": "Local pairing does not yet support this protocol version. Resetting again will not help. If you already have a bindkey, choose Existing keys."
+      "invalid_key": "Bindkey must be 32 hex characters and token, when supplied, 24 hex characters."
     },
     "step": {
       "user": {
         "title": "Set up Xiaomi S400",
-        "description": "Choose the scale and a fully local setup method.",
+        "description": "Choose the scale and enter its existing local BLE credentials.",
         "data": {
-          "address": "Bluetooth address",
-          "setup_method": "Setup method"
+          "address": "Bluetooth address"
         },
         "data_description": {
-          "address": "The six-byte Bluetooth address of the scale, as offered in the dropdown.",
-          "setup_method": "Use Existing keys when the scale is already paired in the Xiaomi Home app. Local provisioning is only for a factory-reset scale."
+          "address": "The six-byte Bluetooth address of the scale, as offered in the dropdown."
         }
-      },
-      "pair": {
-        "title": "Provision locally",
-        "description": "Factory reset and wake the scale, keep it close to the Home Assistant Bluetooth adapter, then submit. This creates new local credentials and replaces any previous Mi Home ownership."
       },
       "keys": {
         "title": "Use existing local credentials",
@@ -55,21 +46,41 @@
       },
       "discovery_confirm": {
         "title": "Xiaomi S400 discovered",
-        "description": "Continue to local provisioning. This replaces any previous Mi Home ownership."
+        "description": "Enter this scale’s existing bindkey and optional GATT token. This step does not reset or provision the scale."
       }
     }
   },
   "entity": {
     "sensor": {
-      "weight": {"name": "Weight"},
-      "heart_rate": {"name": "Heart rate"},
-      "impedance_low": {"name": "Impedance 50 kHz"},
-      "impedance_high": {"name": "Impedance 250 kHz"},
-      "profile_id": {"name": "Profile ID"},
-      "signal_strength": {"name": "Signal strength"}
+      "weight": {
+        "name": "Weight"
+      },
+      "heart_rate": {
+        "name": "Heart rate"
+      },
+      "impedance_low": {
+        "name": "Impedance 50 kHz"
+      },
+      "impedance_high": {
+        "name": "Impedance 250 kHz"
+      },
+      "profile_id": {
+        "name": "Profile ID"
+      },
+      "signal_strength": {
+        "name": "Signal strength"
+      },
+      "measurement_time": {
+        "name": "Measurement time"
+      }
     },
     "binary_sensor": {
-      "stabilized": {"name": "Measurement stabilized"}
+      "stabilized": {
+        "name": "Measurement stabilized"
+      },
+      "gatt_connected": {
+        "name": "GATT connected"
+      }
     }
   },
   "issues": {

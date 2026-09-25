@@ -18,6 +18,7 @@ class S400Advertisement:
     frame_counter: int
     registered: bool
     encrypted: bool
+    timestamp: int | None = None
     profile_id: int | None = None
     weight: float | None = None
     heart_rate: int | None = None
@@ -76,9 +77,7 @@ def parse_mibeacon(address: str, data: bytes, bindkey: bytes) -> S400Advertiseme
         index += 1
         if capability & 0x20:
             index += 1
-    base = S400Advertisement(
-        product_id, version, data[4], registered, encrypted, stabilized=False
-    )
+    base = S400Advertisement(product_id, version, data[4], registered, encrypted)
     if not has_object:
         return base
     if not encrypted:
@@ -107,7 +106,7 @@ def parse_mibeacon(address: str, data: bytes, bindkey: bytes) -> S400Advertiseme
             continue
         if length != 9:
             raise AdvertisementError("S400 object 0x6E16 must contain nine bytes")
-        profile_id, packed, _timestamp = struct.unpack("<BII", value)
+        profile_id, packed, timestamp = struct.unpack("<BII", value)
         mass = packed & 0x7FF
         heart = (packed >> 11) & 0x7F
         impedance = packed >> 18
@@ -120,6 +119,7 @@ def parse_mibeacon(address: str, data: bytes, bindkey: bytes) -> S400Advertiseme
             frame_counter=data[4],
             registered=registered,
             encrypted=encrypted,
+            timestamp=timestamp or None,
             profile_id=profile_id,
             weight=mass / 10 if mass else None,
             heart_rate=heart + 50 if 0 < heart < 127 else None,

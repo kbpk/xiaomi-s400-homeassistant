@@ -27,7 +27,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: S400ConfigEntry) -> bool
     )
     entry.runtime_data = coordinator
     coordinator.start()
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception:
+        await coordinator.stop()
+        raise
     return True
 
 
