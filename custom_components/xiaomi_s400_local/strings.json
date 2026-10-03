@@ -15,26 +15,51 @@
         "description": "Choose the scale and enter its existing local BLE credentials.",
         "data": {
           "address": "Bluetooth address"
+        },
+        "data_description": {
+          "address": "The six-byte Bluetooth address of the scale, as offered in the dropdown."
         }
       },
       "keys": {
         "title": "Use existing local credentials",
-        "description": "Enter the 16-byte bindkey obtained during initial provisioning. The optional 12-byte token enables automatic local GATT login and live measurements.",
+        "description": "The 16-byte bindkey enables passive advertisements. Add the 12-byte token to make Home Assistant connect when the scale wakes and receive automatic live and final measurements over GATT.",
         "data": {
           "bindkey": "Bindkey (32 hex characters)",
           "token": "Login token (24 hex characters, optional)"
+        },
+        "data_description": {
+          "bindkey": "Obtain this key from Xiaomi Cloud Tokens Extractor after pairing the scale. It decrypts the scale's advertisements.",
+          "token": "Optional. Only needed for the active GATT stream. Leave empty for passive-only operation."
+        }
+      },
+      "reconfigure": {
+        "title": "Update credentials",
+        "description": "Replace the stored bindkey and/or token, for example after re-pairing the scale in the Xiaomi Home app.",
+        "data": {
+          "bindkey": "Bindkey (32 hex characters)",
+          "token": "Login token (24 hex characters, optional)"
+        },
+        "data_description": {
+          "bindkey": "Obtain this key from Xiaomi Cloud Tokens Extractor after pairing the scale. It decrypts the scale's advertisements.",
+          "token": "Optional. Only needed for the active GATT stream. Leave empty for passive-only operation."
         }
       },
       "discovery_confirm": {
         "title": "Xiaomi S400 discovered",
         "description": "Enter this scale’s existing bindkey and optional GATT token. This step does not reset or provision the scale."
-      },
-      "reconfigure": {
-        "title": "Update local credentials",
-        "description": "Replace the bindkey and token after the scale has been provisioned again. Leave token empty for passive BLE reception only.",
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Scale behavior",
+        "description": "Adjust repair sensitivity and active Bluetooth timing. Changes reload the integration.",
         "data": {
-          "bindkey": "Bindkey (32 hex characters)",
-          "token": "Login token (24 hex characters, optional)"
+          "failure_threshold": "Failed measurement frames before a bindkey repair (1–20)",
+          "active_retry_interval": "Minimum time between active connection attempts (seconds, 1–300)",
+          "gatt_timeout": "GATT response timeout (seconds, 1–60)",
+          "cmtp_wait_timeout": "CMTP notification wait (seconds, 0.5–30)"
         }
       }
     }
@@ -69,6 +94,30 @@
       },
       "gatt_connected": {
         "name": "GATT connected"
+      }
+    }
+  },
+  "issues": {
+    "invalid_bindkey": {
+      "title": "Xiaomi S400 credentials are invalid",
+      "fix_flow": {
+        "error": {
+          "invalid_key": "Bindkey must be 32 hex characters and token, when supplied, 24 hex characters.",
+          "reload_failed": "Credentials were saved, but the integration could not be reloaded. Check its logs and reload it manually."
+        },
+        "abort": {
+          "entry_not_found": "The scale configuration no longer exists."
+        },
+        "step": {
+          "credentials": {
+            "title": "Update the Xiaomi S400 credentials",
+            "description": "Repeated measurement advertisements failed authentication. Enter the current bindkey and optional token; if the scale was re-paired, obtain its new key first. Confirm the next measurement after the integration reloads.",
+            "data": {
+              "bindkey": "Bindkey (32 hex characters)",
+              "token": "Login token (24 hex characters, optional)"
+            }
+          }
+        }
       }
     }
   }

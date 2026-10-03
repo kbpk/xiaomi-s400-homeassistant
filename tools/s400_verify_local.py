@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
+import re
 import sys
 from collections import Counter
 from dataclasses import asdict
@@ -41,6 +43,11 @@ class _CountTrace:
             self.notifications[str(values["uuid"])] += 1
 
 
+def _measurement_result(fe95_count: int, gatt_count: int = 0) -> int:
+    """Fail verification unless at least one measurement was decoded."""
+    return 0 if fe95_count or gatt_count else 1
+
+
 async def run(args: argparse.Namespace) -> int:
     load_core()
     active = import_module("s400_verify_core.active")
@@ -50,7 +57,12 @@ async def run(args: argparse.Namespace) -> int:
     protocol = import_module("s400_verify_core.protocol")
 
     config = json.loads(args.secrets.read_text(encoding="utf-8"))
-    address = config["mac"].upper()
+    address = args.address
+    saved_address = config.get("mac", "").upper()
+    if not re.fullmatch(r"[0-9A-F]{2}(?::[0-9A-F]{2}){5}", saved_address):
+        raise ValueError("secrets file has no valid MAC address")
+    if saved_address != address:
+        raise ValueError("S400_BLE_ADDRESS does not match the secrets file")
     bindkey = bytes.fromhex(config["bindkey"])
     token = bytes.fromhex(config["token"])
     if len(bindkey) != 16 or len(token) != 12:
@@ -92,7 +104,7 @@ async def run(args: argparse.Namespace) -> int:
             measurements += 1
             print("FE95", json.dumps(asdict(decoded), sort_keys=True))
 
-    print(f"Scanning for {address} for {args.scan_duration:g} seconds...", flush=True)
+    print(f"Scanning for S400 for {args.scan_duration:g} seconds...", flush=True)
     async with BleakScanner(detection_callback=on_advertisement):
         await asyncio.sleep(args.scan_duration)
     print(
@@ -101,7 +113,7 @@ async def run(args: argparse.Namespace) -> int:
         f"errors={dict(advertisement_errors)}"
     )
     if args.scan_only:
-        return 0 if measurements else 1
+        return _measurement_result(measurements)
     if found is None:
         print("Scale not seen. Wake it and retry.")
         return 1
@@ -157,7 +169,7 @@ async def run(args: argparse.Namespace) -> int:
             f"{complete_frames} complete frames, {rejected_frames} rejected frames, "
             f"{decoded_count} decoded measurements"
         )
-    return 0
+    return _measurement_result(measurements, decoded_count)
 
 
 def parse_args() -> argparse.Namespace:
@@ -171,6 +183,11 @@ def parse_args() -> argparse.Namespace:
     arguments.add_argument("--duration", type=float, default=60.0)
     arguments.add_argument("--scan-only", action="store_true")
     args = arguments.parse_args()
+    args.address = os.environ.get("S400_BLE_ADDRESS", "").strip().upper()
+    if not re.fullmatch(r"[0-9A-F]{2}(?::[0-9A-F]{2}){5}", args.address):
+        arguments.error(
+            "set S400_BLE_ADDRESS to a six-byte colon-separated BLE address"
+        )
     if args.scan_duration <= 0 or args.duration <= 0:
         arguments.error("durations must be positive")
     return args
